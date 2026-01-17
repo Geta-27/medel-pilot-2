@@ -1,0 +1,238 @@
+
+const express = require("express");
+const http = require("http");
+const cors = require("cors");
+const crypto = require("crypto");
+const { WebSocketServer } = require("ws");
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const now = () => Date.now();
+
+// -----------------------------
+// In-memory state
+// -----------------------------
+const providers = []; // {id,name,online,specialty,insurance,language,locationText,maxLoad,lastSeen}
+const requests = [];  // {id,createdAt,patientName,reason,locationText,insurance,language,status,providerId,providerName,offeredToProviderId,offerExpiresAt,triedProviderIds[]}
+
+const OFFER_TTL_MS = 15000;     // 15s to accept
+const PROVIDER_STALE_MS = 15000; // provider considered offline if no heartbeat in 15s
+
+function broadcast(wss, payload) {
+  const msg = JSON.stringify(payload);
+  wss.clients.forEach((c) => {
+    if (c.readyState === 1) c.send(msg);
+  });
+}
+
+function syncPayload() {
+  return {
+    type: "SYNC",
+    providers,
+    requests: requests.slice().sort((a, b) => b.createdAt - a.createdAt),
+    ts: now(),
+  };
+}
+
+function pruneStaleProviders() {
+  const t = now();
+  for (const p of providers) {
+    if (p.online && t - p.lastSeen > PROVIDER_STALE_MS) p.online = false;
+  }
+}
+
+function providerLoad(providerId) {
+  // count accepted (active) requests for provider
+  return requests.filter(
+    (r) => r.providerId === providerId && (r.status === "ACCEPTED" || r.status === "OFFERED")
+  ).length;
+}
+
+function eligibleProvidersFor(req) {
+  pruneStaleProviders();
+
+  return providers
+    .filter((p) => p.online)
+    .filter((p) => providerLoad(p.id) < (p.maxLoad || 1))
+    .filter((p) => !req.triedProviderIds.includes(p.id))
+    .map((p) => {
+      // simple scoring: prefer matching insurance/language if provided
+      let score = 0;
+      if (req.insurance && p.insurance && req.insurance.toLowerCase() === p.insurance.toLowerCase()) score += 2;
+      if (req.language && p.language && req.language.toLowerCase() === p.language.toLowerCase()) score += 1;
+      // prefer recently seen (more reliable)
+      score += Math.max(0, 10 - Math.floor((now() - p.lastSeen) / 1000));
+      return { p, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.p);
+}
+
+function offerToNextProvider(req) {
+  const next = eligibleProvidersFor(req)[0];
+  if (!next) {
+    req.status = "NO_PROVIDER";
+    req.offeredToProviderId = null;
+    req.offerExpiresAt = null;
+    req.providerId = null;
+    req.providerName = null;
+    return false;
+  }
+
+  req.status = "OFFERED";
+  req.offeredToProviderId = next.id;
+  req.offerExpiresAt = now() + OFFER_TTL_MS;
+  return true;
+}
+
+function tickReroute() {
+  pruneStaleProviders();
+
+  const t = now();
+  for (const r of requests) {
+    if (r.status === "OFFERED" && r.offerExpiresAt && t > r.offerExpiresAt) {
+      // mark the offered provider as tried
+      if (r.offeredToProviderId) r.triedProviderIds.push(r.offeredToProviderId);
+      // reroute
+      offerToNextProvider(r);
+    }
+  }
+}
+
+// -----------------------------
+// Health
+// -----------------------------
+app.get("/health", (_req, res) => res.json({ ok: true }));
+
+// -----------------------------
+// Providers
+// -----------------------------
+app.get("/api/providers", (_req, res) => {
+  pruneStaleProviders();
+  res.json({ providers });
+});
+
+app.post("/api/providers/heartbeat", (req, res) => {
+  const body = req.body || {};
+  const providerId = body.providerId || crypto.randomUUID();
+  const name = body.providerName || "Provider";
+
+  let p = providers.find((x) => x.id === providerId);
+  if (!p) {
+    p = {
+      id: providerId,
+      name,
+      online: !!body.online,
+      specialty: body.specialty || "",
+      insurance: body.insurance || "",
+      language: body.language || "",
+      locationText: body.locationText || "",
+      maxLoad: Number(body.maxLoad || 1),
+      lastSeen: now(),
+    };
+    providers.push(p);
+  } else {
+    p.name = name;
+    p.online = !!body.online;
+    p.specialty = body.specialty ?? p.specialty;
+    p.insurance = body.insurance ?? p.insurance;
+    p.language = body.language ?? p.language;
+    p.locationText = body.locationText ?? p.locationText;
+    p.maxLoad = Number(body.maxLoad || p.maxLoad || 1);
+    p.lastSeen = now();
+  }
+
+  res.json({ providerId, provider: p });
+});
+
+// -----------------------------
+// Requests
+// -----------------------------
+app.get("/api/requests", (_req, res) => {
+  res.json({ requests: requests.slice().sort((a, b) => b.createdAt - a.createdAt) });
+});
+
+app.post("/api/requests", (req, res) => {
+  const {
+    patientName = "Patient",
+    reason = "",
+    locationText = "",
+    insurance = "",
+    language = "",
+  } = req.body || {};
+
+  const id = crypto.randomUUID();
+  const item = {
+    id,
+    createdAt: now(),
+    patientName,
+    reason,
+    locationText,
+    insurance,
+    language,
+    status: "PENDING",
+    providerId: null,
+    providerName: null,
+    offeredToProviderId: null,
+    offerExpiresAt: null,
+    triedProviderIds: [],
+  };
+
+  requests.push(item);
+
+  // immediately offer to best provider
+  offerToNextProvider(item);
+
+  res.json({ request: item });
+});
+
+app.post("/api/requests/:id/accept", (req, res) => {
+  const { providerId, providerName = "Provider" } = req.body || {};
+  const r = requests.find((x) => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: "Not found" });
+
+  if (r.status !== "OFFERED") return res.status(400).json({ error: "Not offered" });
+  if (!providerId) return res.status(400).json({ error: "providerId required" });
+
+  // only the offered-to provider can accept
+  if (r.offeredToProviderId !== providerId) return res.status(403).json({ error: "Not your offer" });
+
+  r.status = "ACCEPTED";
+  r.providerId = providerId;
+  r.providerName = providerName;
+  r.offeredToProviderId = null;
+  r.offerExpiresAt = null;
+
+  res.json({ request: r });
+});
+
+app.post("/api/requests/:id/complete", (req, res) => {
+  const r = requests.find((x) => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: "Not found" });
+  r.status = "COMPLETED";
+  res.json({ request: r });
+});
+
+// -----------------------------
+// Server + WebSocket
+// -----------------------------
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+wss.on("connection", (ws) => {
+  ws.send(JSON.stringify(syncPayload()));
+});
+
+// push sync + reroute tick
+setInterval(() => {
+  tickReroute();
+  broadcast(wss, syncPayload());
+}, 800);
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Backend running on http://0.0.0.0:${PORT}`);
+});
+

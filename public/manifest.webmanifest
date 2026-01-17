@@ -1,6 +1,6 @@
 {
-  "name": "MedEl",
-  "short_name": "MedEl",
+  "name": "CareX",
+  "short_name": "CareX",
   "start_url": "/patient",
   "display": "standalone",
   "background_color": "#ffffff",

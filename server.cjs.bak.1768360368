@@ -1,0 +1,212 @@
+const http = require("http");
+const crypto = require("crypto");
+const express = require("express");
+const cors = require("cors");
+const { WebSocketServer } = require("ws");
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const now = () => Date.now();
+
+let requests = [];
+let providers = [];
+
+function isProviderOnline(p) {
+  return !!p.online && (now() - (p.lastSeen || 0) < 10_000);
+}
+
+function providerLoad(providerId) {
+  return requests.filter(r =>
+    r.assignedProviderId === providerId &&
+    (r.status === "ASSIGNED" || r.status === "ACCEPTED")
+  ).length;
+}
+
+function normalizeStr(x) {
+  return String(x || "").trim();
+}
+
+function matches(req, p) {
+  const reqInsurance = normalizeStr(req.insurance).toLowerCase();
+  const reqLanguage  = normalizeStr(req.language).toLowerCase();
+  const reqSpecialty = normalizeStr(req.specialty).toLowerCase();
+
+  const pInsurance = normalizeStr(p.insurance).toLowerCase();
+  const pLanguage  = normalizeStr(p.language).toLowerCase();
+  const pSpecialty = normalizeStr(p.specialty).toLowerCase();
+
+  if (reqInsurance && pInsurance && reqInsurance !== pInsurance) return false;
+  if (reqLanguage && pLanguage && reqLanguage !== pLanguage) return false;
+  if (reqSpecialty && pSpecialty && reqSpecialty !== pSpecialty) return false;
+
+  return true;
+}
+
+function pickProviderForRequest(req) {
+  const online = providers.filter(isProviderOnline);
+
+  const eligible = online
+    .filter(p => matches(req, p))
+    .filter(p => providerLoad(p.id) < (Number(p.maxLoad) || 1))
+    .sort((a,b) => {
+      const la = providerLoad(a.id), lb = providerLoad(b.id);
+      if (la !== lb) return la - lb;
+      return (b.lastSeen||0) - (a.lastSeen||0);
+    });
+
+  return eligible[0] || null;
+}
+
+function tryDispatchOnce() {
+  const t = now();
+
+  // reroute expired ASSIGNED requests
+  for (const r of requests) {
+    if (r.status === "ASSIGNED" && r.assignExpiresAt && t > r.assignExpiresAt) {
+      r.status = "PENDING";
+      r.providerName = null;
+      r.assignedProviderId = null;
+      r.assignedAt = null;
+      r.assignExpiresAt = null;
+      r.reroutes = (r.reroutes || 0) + 1;
+    }
+  }
+
+  // assign PENDING requests
+  for (const r of requests) {
+    if (r.status !== "PENDING") continue;
+    const p = pickProviderForRequest(r);
+    if (!p) continue;
+
+    r.status = "ASSIGNED";
+    r.assignedProviderId = p.id;
+    r.providerName = p.providerName;
+    r.assignedAt = now();
+    r.assignExpiresAt = now() + 20_000; // 20s accept window
+  }
+}
+
+function syncPayload() {
+  return {
+    type: "SYNC",
+    now: now(),
+    requests: requests.slice().sort((a,b)=>b.createdAt-a.createdAt),
+    providers: providers.map(p => ({
+      ...p,
+      onlineEffective: isProviderOnline(p),
+      load: providerLoad(p.id),
+    })),
+  };
+}
+
+function broadcast(wss, payload) {
+  const msg = JSON.stringify(payload);
+  wss.clients.forEach((c) => {
+    if (c.readyState === 1) c.send(msg);
+  });
+}
+
+app.get("/health", (_req, res) => res.json({ ok: true }));
+
+// Providers
+app.get("/api/providers", (_req, res) => {
+  res.json({ providers: syncPayload().providers });
+});
+
+app.post("/api/providers/heartbeat", (req, res) => {
+  const body = req.body || {};
+  const providerName = normalizeStr(body.providerName) || "Provider";
+  const id = normalizeStr(body.providerId) || crypto.randomUUID();
+
+  let p = providers.find(x => x.id === id);
+  if (!p) {
+    p = { id, createdAt: now() };
+    providers.push(p);
+  }
+
+  p.providerName = providerName;
+  p.online = !!body.online;
+  p.specialty = normalizeStr(body.specialty);
+  p.insurance = normalizeStr(body.insurance);
+  p.language = normalizeStr(body.language);
+  p.locationText = normalizeStr(body.locationText);
+  p.maxLoad = Number(body.maxLoad || 1);
+  p.lastSeen = now();
+
+  res.json({ provider: { ...p, onlineEffective: isProviderOnline(p), load: providerLoad(p.id) } });
+});
+
+// Requests
+app.get("/api/requests", (_req, res) => {
+  res.json({ requests: requests.slice().sort((a, b) => b.createdAt - a.createdAt) });
+});
+
+app.post("/api/requests", (req, res) => {
+  const body = req.body || {};
+  const id = crypto.randomUUID();
+
+  const item = {
+    id,
+    createdAt: now(),
+    patientName: normalizeStr(body.patientName) || "Patient",
+    reason: normalizeStr(body.reason),
+    locationText: normalizeStr(body.locationText),
+    insurance: normalizeStr(body.insurance),
+    language: normalizeStr(body.language),
+    specialty: normalizeStr(body.specialty),
+    status: "PENDING",
+    providerName: null,
+    assignedProviderId: null,
+    assignedAt: null,
+    assignExpiresAt: null,
+    reroutes: 0,
+  };
+
+  requests.push(item);
+  tryDispatchOnce(); // immediate dispatch after request creation
+  res.json({ request: item });
+});
+
+app.post("/api/requests/:id/accept", (req, res) => {
+  const { providerName = "Provider", providerId = "" } = req.body || {};
+  const r = requests.find((x) => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: "Not found" });
+
+  if (r.assignedProviderId && providerId && r.assignedProviderId !== providerId) {
+    return res.status(400).json({ error: "Assigned to another provider" });
+  }
+
+  if (r.status !== "ASSIGNED" && r.status !== "PENDING") {
+    return res.status(400).json({ error: "Not assignable" });
+  }
+
+  r.status = "ACCEPTED";
+  r.providerName = normalizeStr(providerName) || r.providerName || "Provider";
+  res.json({ request: r });
+});
+
+app.post("/api/requests/:id/complete", (req, res) => {
+  const r = requests.find((x) => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: "Not found" });
+  r.status = "COMPLETED";
+  res.json({ request: r });
+});
+
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+wss.on("connection", (ws) => {
+  ws.send(JSON.stringify(syncPayload()));
+});
+
+setInterval(() => {
+  tryDispatchOnce();
+  broadcast(wss, syncPayload());
+}, 800);
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Backend running on http://0.0.0.0:${PORT}`);
+});
