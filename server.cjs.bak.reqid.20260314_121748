@@ -454,23 +454,19 @@ app.post("/api/providers/heartbeat", (req, res) => {
 app.get("/api/requests", (_req, res) => res.json({ requests: requests.slice().sort((a,b)=>b.createdAt-a.createdAt) }));
 
 app.post("/api/requests", (req, res) => {
-  const body = req.body || {};
-  const crypto = require("crypto");
+  const b = req.body || {};
+  const id = crypto.randomUUID();
 
-  const requestId = String(
-    body.requestId || `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  );
+  const r = {
+    id,
+    createdAt: now(),
+    patientName: norm(b.patientName) || "Patient",
+    reason: norm(b.reason),
+    locationText: norm(b.locationText),
+    insurance: norm(b.insurance),
+    language: norm(b.language),
+    specialty: norm(b.specialty),
 
-  const request = {
-    id: crypto.randomUUID(),
-    requestId,
-    createdAt: Date.now(),
-    patientName: body.patientName || "Patient",
-    reason: body.reason || "",
-    locationText: body.locationText || "",
-    insurance: String(body.insurance || "").toLowerCase(),
-    language: String(body.language || "").toLowerCase(),
-    specialty: String(body.specialty || "").replace(/_/g, " ").toLowerCase(),
     status: "PENDING",
     assignedProviderId: null,
     providerName: null,
@@ -478,21 +474,16 @@ app.post("/api/requests", (req, res) => {
     assignExpiresAt: null,
     reroutes: 0,
     triedProviderIds: [],
-    slotStart: body.slotStart || null,
-    slotEnd: body.slotEnd || null,
-    bookingId: null,
   };
 
-  requests.push(request);
-
-  return res.json({
-    ok: true,
-    request,
-  });
+  requests.push(r);
+  dispatchOnce();
+  res.json({ request: r });
 });
 
+// Offer → Accept: only the assigned provider can accept while ASSIGNED
 app.post("/api/requests/:id/accept", (req, res) => {
-  const id = String(req.params.id);
+  const id = req.params.id;
   const { providerId, slotStart, slotEnd } = req.body || {};
 
   if (!Array.isArray(requests)) {
@@ -503,7 +494,8 @@ app.post("/api/requests/:id/accept", (req, res) => {
   }
 
   const r = requests.find((x) =>
-    String(x.id) === id || String(x.requestId) === id
+    String(x.id) === String(id) ||
+    String(x.requestId) === String(id)
   );
 
   if (!r) {
@@ -544,7 +536,6 @@ app.post("/api/requests/:id/accept", (req, res) => {
   }
 
   r.status = "ACCEPTED";
-  r.assignedAt = Date.now();
 
   return res.json({
     ok: true,

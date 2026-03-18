@@ -71,7 +71,6 @@ export default function App() {
   const [maxLoad, setMaxLoad] = useState(1);
   const [busyMinutes, setBusyMinutes] = useState(0);
   const [online, setOnline] = useState(false);
-  const [acceptingRequestId, setAcceptingRequestId] = useState(null);
 
   const providerIdRef = useRef(localStorage.getItem("medel_provider_id") || "");
   if (!providerIdRef.current) {
@@ -173,20 +172,41 @@ export default function App() {
   }
 
   async function acceptRequest(id) {
-    if (!id) return;
-    if (acceptingRequestId) return;
+    const { slotStart, slotEnd } = nextSlotWindow();
 
-    const target = requests.find((r) => String(r.requestId || r.id) === String(id));
-    if (!target || target.status !== "PENDING") {
-      alert("Only pending requests can be accepted");
+    const holdRes = await fetch(`${apiBase()}/api/slots/hold`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requestId: id,
+        providerId: myProviderId,
+        slotStart,
+        slotEnd,
+      }),
+    });
+
+    const holdData = await holdRes.json().catch(() => ({}));
+
+    if (!holdRes.ok || !holdData?.ok) {
+      alert(holdData?.error || "Could not hold slot");
       return;
     }
 
-    setAcceptingRequestId(id);
-    const { slotStart, slotEnd } = nextSlotWindow();
+    const acceptRes = await fetch(`${apiBase()}/api/requests/${id}/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        providerName,
+        providerId: myProviderId,
+        slotStart,
+        slotEnd,
+      }),
+    });
 
-    try {
-      const holdRes = await fetch(`${apiBase()}/api/slots/hold`, {
+    const acceptData = await acceptRes.json().catch(() => ({}));
+
+    if (!acceptRes.ok || !acceptData?.ok) {
+      await fetch(`${apiBase()}/api/slots/release`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -195,44 +215,9 @@ export default function App() {
           slotStart,
           slotEnd,
         }),
-      });
-
-      const holdData = await holdRes.json().catch(() => ({}));
-
-      if (!holdRes.ok || !holdData?.ok) {
-        alert(holdData?.error || "Could not hold slot");
-        return;
-      }
-
-      const acceptRes = await fetch(`${apiBase()}/api/requests/${id}/accept`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          providerName,
-          providerId: myProviderId,
-          slotStart,
-          slotEnd,
-        }),
-      });
-
-      const acceptData = await acceptRes.json().catch(() => ({}));
-
-      if (!acceptRes.ok || !acceptData?.ok) {
-        await fetch(`${apiBase()}/api/slots/release`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            requestId: id,
-            providerId: myProviderId,
-            slotStart,
-            slotEnd,
-          }),
-        }).catch(() => {});
-        alert(acceptData?.error || "Could not accept request");
-        return;
-      }
-    } finally {
-      setAcceptingRequestId(null);
+      }).catch(() => {});
+      alert(acceptData?.error || "Could not accept request");
+      return;
     }
   }
 
@@ -423,13 +408,7 @@ export default function App() {
 
                       <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
                         {mine && r.status === "ASSIGNED" && (
-                          <button
-                            style={{ ...btn("#2563eb"), opacity: acceptingRequestId === (r.requestId || r.id) ? 0.6 : 1 }}
-                            disabled={!!acceptingRequestId || r.status !== "PENDING"}
-                            onClick={() => acceptRequest(r.requestId || r.id)}
-                          >
-                            {acceptingRequestId === (r.requestId || r.id) ? "Accepting..." : "Accept"}
-                          </button>
+                          <button style={btn("#2563eb")} onClick={() => acceptRequest(r.requestId || r.id)}>Accept</button>
                         )}
                         {mine && r.status === "ACCEPTED" && (
                           <button style={btn("#16a34a")} onClick={() => completeRequest(r.id)}>Complete</button>

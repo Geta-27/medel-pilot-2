@@ -15,28 +15,7 @@ function Pill({ s }) {
     s === "COMPLETED" ? "#bbf7d0" :
     s === "NO_PROVIDER" ? "#fecaca" :
     "#e5e7eb";
-
-  const label =
-    s === "PENDING" ? "Searching" :
-    s === "ASSIGNED" ? "Assigned" :
-    s === "ACCEPTED" ? "Accepted" :
-    s === "COMPLETED" ? "Completed" :
-    s === "NO_PROVIDER" ? "No provider" :
-    s;
-
-  return (
-    <span
-      style={{
-        background: bg,
-        padding: "4px 10px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 700
-      }}
-    >
-      {label}
-    </span>
-  );
+  return <span style={{ background: bg, padding: "3px 8px", borderRadius: 999, fontSize: 12 }}>{s}</span>;
 }
 
 function roleFromPath() {
@@ -71,7 +50,6 @@ export default function App() {
   const [maxLoad, setMaxLoad] = useState(1);
   const [busyMinutes, setBusyMinutes] = useState(0);
   const [online, setOnline] = useState(false);
-  const [acceptingRequestId, setAcceptingRequestId] = useState(null);
 
   const providerIdRef = useRef(localStorage.getItem("medel_provider_id") || "");
   if (!providerIdRef.current) {
@@ -113,54 +91,32 @@ export default function App() {
     return () => ws.close();
   }, []);
 
-  // Provider upsert + heartbeat while online
+  // Provider heartbeat while online
   useEffect(() => {
     if (!online) return;
     const beat = async () => {
       try {
-        await fetch(`${apiBase()}/api/providers/upsert`, {
+        await fetch(`${apiBase()}/api/providers/heartbeat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            id: myProviderId,
-            name: providerName,
+            providerId: myProviderId,
+            providerName,
             online: true,
             maxLoad,
             insurance: providerInsurance,
             language: providerLanguage,
             specialty: providerSpecialty,
             locationText: providerLocationText,
-            busyUntil: Number(busyMinutes || 0) > 0
-              ? Date.now() + Number(busyMinutes || 0) * 60 * 1000
-              : null,
+            busyMinutes: Number(busyMinutes || 0),
           }),
         });
-
-        await fetch(`${apiBase()}/api/providers/heartbeat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: myProviderId
-          }),
-        });
-      } catch (e) {
-        console.error("provider beat failed", e);
-      }
+      } catch {}
     };
     beat();
     const t = setInterval(beat, 5000);
     return () => clearInterval(t);
-  }, [online, myProviderId, providerName, maxLoad, providerInsurance, providerLanguage, providerSpecialty, providerLocationText, busyMinutes]);
-
-  function nextSlotWindow() {
-    const start = new Date();
-    start.setSeconds(0, 0);
-    const end = new Date(start.getTime() + 15 * 60 * 1000);
-    return {
-      slotStart: start.toISOString(),
-      slotEnd: end.toISOString(),
-    };
-  }
+  }, [online, providerName, maxLoad, providerInsurance, providerLanguage, providerSpecialty, providerLocationText, busyMinutes]);
 
   async function createRequest() {
     const res = await fetch(`${apiBase()}/api/requests`, {
@@ -173,67 +129,11 @@ export default function App() {
   }
 
   async function acceptRequest(id) {
-    if (!id) return;
-    if (acceptingRequestId) return;
-
-    const target = requests.find((r) => String(r.requestId || r.id) === String(id));
-    if (!target || target.status !== "PENDING") {
-      alert("Only pending requests can be accepted");
-      return;
-    }
-
-    setAcceptingRequestId(id);
-    const { slotStart, slotEnd } = nextSlotWindow();
-
-    try {
-      const holdRes = await fetch(`${apiBase()}/api/slots/hold`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requestId: id,
-          providerId: myProviderId,
-          slotStart,
-          slotEnd,
-        }),
-      });
-
-      const holdData = await holdRes.json().catch(() => ({}));
-
-      if (!holdRes.ok || !holdData?.ok) {
-        alert(holdData?.error || "Could not hold slot");
-        return;
-      }
-
-      const acceptRes = await fetch(`${apiBase()}/api/requests/${id}/accept`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          providerName,
-          providerId: myProviderId,
-          slotStart,
-          slotEnd,
-        }),
-      });
-
-      const acceptData = await acceptRes.json().catch(() => ({}));
-
-      if (!acceptRes.ok || !acceptData?.ok) {
-        await fetch(`${apiBase()}/api/slots/release`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            requestId: id,
-            providerId: myProviderId,
-            slotStart,
-            slotEnd,
-          }),
-        }).catch(() => {});
-        alert(acceptData?.error || "Could not accept request");
-        return;
-      }
-    } finally {
-      setAcceptingRequestId(null);
-    }
+    await fetch(`${apiBase()}/api/requests/${id}/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ providerName, providerId: myProviderId }),
+    });
   }
 
   async function completeRequest(id) {
@@ -244,15 +144,12 @@ export default function App() {
     });
   }
 
-  const card = { border: "1px solid #e5e7eb", borderRadius: 14, padding: 14, background: "white", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" };
+  const card = { border: "1px solid #e5e7eb", borderRadius: 14, padding: 14, background: "white" };
   const inp = { width: "100%", padding: 10, borderRadius: 10, border: "1px solid #e5e7eb", marginTop: 10 };
   const btn = (bg="#111827") => ({ marginTop: 12, padding: "10px 12px", borderRadius: 10, border: "none", background: bg, color: "white", fontWeight: 800, cursor: "pointer" });
   const linkBtn = { border: "none", background: "transparent", textDecoration: "underline", cursor: "pointer", fontSize: 13 };
 
   const secondsLeft = (r) => r?.assignExpiresAt ? Math.max(0, Math.ceil((r.assignExpiresAt - serverNow) / 1000)) : null;
-  const onlineProviders = providers.filter(p => p.onlineEffective);
-  const activeRequests = requests.filter(r => r.status !== "COMPLETED");
-  const capacityUsed = providers.reduce((n, p) => n + (p.load || 0), 0);
 
   const providerQueue = useMemo(() => {
     const mine = requests.filter(r => r.assignedProviderId === myProviderId && r.status !== "COMPLETED");
@@ -265,13 +162,10 @@ export default function App() {
     <div style={{ fontFamily: "system-ui", padding: 16, maxWidth: 900, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div>
-          <div style={{ fontSize: 24, fontWeight: 900 }}>MedEl</div>
-          <div style={{ fontSize: 12, opacity: 0.75 }}>
-            Real-time care dispatch demo
-          </div>
-          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+          <div style={{ fontSize: 22, fontWeight: 900 }}>MedEl</div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>
             Live: <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 99, margin: "0 6px", background: wsOk ? "green" : "red" }} />
-            {wsOk ? "ON" : "OFF"} · Online providers: {onlineProviders.length} · Active requests: {activeRequests.length} · Capacity in use: {capacityUsed}
+            {wsOk ? "ON" : "OFF"} · Online providers: {providers.filter(p => p.onlineEffective).length}
           </div>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -310,7 +204,7 @@ export default function App() {
             <input style={inp} value={locationText} onChange={(e) => setLocationText(e.target.value)} placeholder="Location (optional)" />
 
             <button style={{ ...btn(), opacity: myId ? 0.6 : 1 }} disabled={!!myId} onClick={createRequest}>
-              {myId ? "Request Submitted" : "Request Care"}
+              {myId ? "Request Sent" : "Request Care"}
             </button>
 
             {myReq && (
@@ -321,40 +215,25 @@ export default function App() {
                 </div>
                 <div style={{ marginTop: 8, fontSize: 14 }}>
                   <div><b>Provider:</b> {myReq.providerName || "Searching…"} </div>
-                  <div><b>Requested match:</b> {myReq.specialty || "any"} / {myReq.insurance || "any"} / {myReq.language || "any"}</div>
-                  {myReq.status === "PENDING" && (
-                    <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
-                      We are looking for the best available provider now.
-                    </div>
-                  )}
+                  <div><b>Filters:</b> {myReq.specialty || "any"} / {myReq.insurance || "any"} / {myReq.language || "any"}</div>
                   {myReq.status === "ASSIGNED" && myReq.assignExpiresAt && (
                     <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
-                      Provider offer expires in {secondsLeft(myReq)}s, then MedEl will reroute automatically.
+                      Offer expires in {secondsLeft(myReq)}s → then we auto-reroute.
                     </div>
                   )}
-                  {myReq.status === "ACCEPTED" && (
-                    <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
-                      Your provider accepted the request.
-                    </div>
-                  )}
-                  {myReq.status === "COMPLETED" && (
-                    <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
-                      This request has been completed.
-                    </div>
-                  )}
-                  {!!myReq.reroutes && <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>Automatic reroutes: {myReq.reroutes}</div>}
+                  {!!myReq.reroutes && <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>Reroutes: {myReq.reroutes}</div>}
                 </div>
               </div>
             )}
           </div>
 
           <div style={{ ...card }}>
-            <div style={{ fontWeight: 900, marginBottom: 8 }}>Available providers</div>
-            {onlineProviders.length === 0 ? (
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>Online providers</div>
+            {providers.filter(p => p.onlineEffective).length === 0 ? (
               <div style={{ opacity: 0.7 }}>No providers online.</div>
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
-                {onlineProviders.map((p) => (
+                {providers.filter(p => p.onlineEffective).map((p) => (
                   <div key={p.id} style={{ ...card, background: "#fafafa" }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <div style={{ fontWeight: 900 }}>{p.name}</div>
@@ -423,13 +302,7 @@ export default function App() {
 
                       <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
                         {mine && r.status === "ASSIGNED" && (
-                          <button
-                            style={{ ...btn("#2563eb"), opacity: acceptingRequestId === (r.requestId || r.id) ? 0.6 : 1 }}
-                            disabled={!!acceptingRequestId || r.status !== "PENDING"}
-                            onClick={() => acceptRequest(r.requestId || r.id)}
-                          >
-                            {acceptingRequestId === (r.requestId || r.id) ? "Accepting..." : "Accept"}
-                          </button>
+                          <button style={btn("#2563eb")} onClick={() => acceptRequest(r.id)}>Accept</button>
                         )}
                         {mine && r.status === "ACCEPTED" && (
                           <button style={btn("#16a34a")} onClick={() => completeRequest(r.id)}>Complete</button>

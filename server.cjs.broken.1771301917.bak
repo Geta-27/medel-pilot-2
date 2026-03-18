@@ -1,0 +1,294 @@
+const http = require("http");
+const crypto = require("crypto");
+const express = require("express");
+const cors = require("cors");
+const { WebSocketServer } = require("ws");
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const now = () => Date.now();
+
+// -------- Tunables ----------
+const ASSIGN_TTL_MS = 20000;      // offer expires in 20s → reroute
+const STALE_PROVIDER_MS = 20000;  // provider must heartbeat within 20s
+
+// -------- State (in-memory) ----------
+const providers = []; // {id,name,online,maxLoad,insurance,language,specialty,locationText,lastSeen,busyUntil,load}
+const requests = [];  // {id,createdAt,patientName,reason,locationText,insurance,language,specialty,status,assignedProviderId,providerName,assignedAt,assignExpiresAt,reroutes,triedProviderIds}
+
+
+function isProviderOnline(p) {
+  if (!p.online) return false;
+  if (!p.lastSeen || (now() - p.lastSeen) > STALE_PROVIDER_MS) return false;
+  if (p.busyUntil && now() < p.busyUntil) return false;
+  return true;
+}
+
+function providerLoad(id) {
+  // count assigned/accepted as active; keep also p.load for quick UI
+  return requests.filter(r =>
+    r.assignedProviderId === id &&
+    (r.status === "ASSIGNED" || r.status === "ACCEPTED")
+  ).length;
+}
+
+function matchesFilters(r, p) {
+  // If request specifies a filter, provider must match it (exact match, case-insensitive).
+  const ri = norm(r.insurance).toLowerCase();
+  const rl = norm(r.language).toLowerCase();
+  const rs = norm(r.specialty).toLowerCase();
+
+  const pi = norm(p.insurance).toLowerCase();
+  const pl = norm(p.language).toLowerCase();
+  const ps = norm(p.specialty).toLowerCase();
+
+  if (ri && ri !== pi) return false;
+  if (rl && rl !== pl) return false;
+  if (rs && rs !== ps) return false;
+
+  return true;
+}
+
+  return String(s)
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+
+function eligibleProviders(r) {
+  // update loads
+  for (const p of providers) p.load = providerLoad(p.id);
+
+  return providers
+    .filter(isProviderOnline)
+    .filter(p => matchesFilters(r, p))
+    .filter(p => (p.load || 0) < (p.maxLoad || 1))
+    .filter(p => !r.triedProviderIds.includes(p.id))
+    .sort((a, b) => {
+      // lowest load first, then most recently seen
+      const la = a.load || 0, lb = b.load || 0;
+      if (la !== lb) return la - lb;
+      return (b.lastSeen || 0) - (a.lastSeen || 0);
+    });
+}
+
+function assignTo(r, p) {
+  r.status = "ASSIGNED";
+  r.assignedProviderId = p.id;
+  r.providerName = p.name;
+  r.assignedAt = now();
+  r.assignExpiresAt = now() + ASSIGN_TTL_MS;
+}
+
+function expireAndReroute() {
+  const t = now();
+  for (const r of requests) {
+    if (r.status === "ASSIGNED" && r.assignExpiresAt && t > r.assignExpiresAt) {
+      if (r.assignedProviderId) r.triedProviderIds.push(r.assignedProviderId);
+      r.status = "PENDING";
+      r.providerName = null;
+      r.assignedProviderId = null;
+      r.assignedAt = null;
+      r.assignExpiresAt = null;
+      r.reroutes = (r.reroutes || 0) + 1;
+    }
+  }
+}
+
+function dispatchOnce() {
+  expireAndReroute();
+
+  for (const r of requests) {
+    if (r.status !== "PENDING") continue;
+    const cand = eligibleProviders(r)[0];
+    if (!cand) continue;
+    assignTo(r, cand);
+  }
+}
+
+function syncPayload() {
+  // refresh loads
+  for (const p of providers) p.load = providerLoad(p.id);
+
+  return {
+    type: "SYNC",
+    now: now(),
+    providers: providers.map(p => ({
+      id: p.id,
+      name: p.name,
+      online: !!p.online,
+      onlineEffective: isProviderOnline(p),
+      maxLoad: p.maxLoad || 1,
+      load: p.load || 0,
+      insurance: p.insurance || "",
+      language: p.language || "",
+      specialty: p.specialty || "",
+      locationText: p.locationText || "",
+      busyUntil: p.busyUntil || null,
+      lastSeen: p.lastSeen || 0,
+    })),
+    requests: requests.slice().sort((a,b) => b.createdAt - a.createdAt),
+  };
+}
+
+function broadcast(wss, payload) {
+  const msg = JSON.stringify(payload);
+  wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
+}
+
+// -------- Routes ----------
+app.get("/health", (_req, res) => res.json({ ok: true }));
+
+app.get("/api/providers", (_req, res) => res.json({ providers: syncPayload().providers }));
+
+// Dry-run dispatch decision (does NOT create a request)
+app.post("/api/dispatch/decision", (req, res) => {
+  try {
+    const { insurance = "", language = "", specialty = "", locationText = "", limit = 5 } = req.body || {};
+
+    // request-like object compatible with your matching logic
+    const r = {
+      insurance,
+      language,
+      specialty,
+      locationText,
+      triedProviderIds: [],
+    };
+
+    const elig = eligibleProviders(r);
+
+    const candidates = elig
+      .slice(0, Math.max(1, Math.min(50, Number(limit) || 5)))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        score: 100 - (p.load || 0) * 20, // simple MVP score: prefer low load
+        load: p.load || 0,
+        lastSeen: p.lastSeen || null,
+        insurance: p.insurance,
+        language: p.language,
+        specialty: p.specialty,
+        locationText: p.locationText,
+        online: !!p.online,
+      }));
+
+    res.json({
+      ok: true,
+      recommendedProviderId: candidates[0]?.id ?? null,
+      candidates,
+    });
+  } catch (e) {
+    console.error("api/dispatch/decision error:", e);
+    res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+app.post("/api/providers/heartbeat", (req, res) => {
+  const b = req.body || {};
+  const providerId = norm(b.providerId) || crypto.randomUUID();
+
+  let p = providers.find(x => x.id === providerId);
+  if (!p) {
+    p = { id: providerId };
+    providers.push(p);
+  }
+
+  p.name = norm(b.providerName) || p.name || "Provider";
+  p.online = !!b.online;
+  p.maxLoad = Number(b.maxLoad || p.maxLoad || 1);
+  p.insurance = norm(b.insurance);
+  p.language = norm(b.language);
+  p.specialty = norm(b.specialty);
+  p.locationText = norm(b.locationText);
+  p.lastSeen = now();
+
+  // busyUntil: allow provider to pause without going offline
+  if (b.busyMinutes && Number(b.busyMinutes) > 0) {
+    p.busyUntil = now() + Number(b.busyMinutes) * 60_000;
+  } else if (b.busyUntil === null) {
+    p.busyUntil = null;
+  }
+
+  res.json({ provider: { ...p, onlineEffective: isProviderOnline(p), load: providerLoad(p.id) } });
+});
+
+app.get("/api/requests", (_req, res) => res.json({ requests: requests.slice().sort((a,b)=>b.createdAt-a.createdAt) }));
+
+app.post("/api/requests", (req, res) => {
+  const b = req.body || {};
+  const id = crypto.randomUUID();
+
+  const r = {
+    id,
+    createdAt: now(),
+    patientName: norm(b.patientName) || "Patient",
+    reason: norm(b.reason),
+    locationText: norm(b.locationText),
+    insurance: norm(b.insurance),
+    language: norm(b.language),
+    specialty: norm(b.specialty),
+
+    status: "PENDING",
+    assignedProviderId: null,
+    providerName: null,
+    assignedAt: null,
+    assignExpiresAt: null,
+    reroutes: 0,
+    triedProviderIds: [],
+  };
+
+  requests.push(r);
+  dispatchOnce();
+  res.json({ request: r });
+});
+
+// Offer → Accept: only the assigned provider can accept while ASSIGNED
+app.post("/api/requests/:id/accept", (req, res) => {
+  const b = req.body || {};
+  const providerId = norm(b.providerId);
+  const providerName = norm(b.providerName) || "Provider";
+
+  const r = requests.find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: "Not found" });
+
+  if (r.status !== "ASSIGNED") return res.status(400).json({ error: "Not assigned" });
+  if (!providerId) return res.status(400).json({ error: "providerId required" });
+  if (r.assignedProviderId !== providerId) return res.status(403).json({ error: "Not your offer" });
+
+  r.status = "ACCEPTED";
+  r.providerName = providerName;
+
+  res.json({ request: r });
+});
+
+app.post("/api/requests/:id/complete", (req, res) => {
+  const b = req.body || {};
+  const providerId = norm(b.providerId);
+
+  const r = requests.find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: "Not found" });
+
+  // optional enforcement
+  if (providerId && r.assignedProviderId && providerId !== r.assignedProviderId) {
+    return res.status(403).json({ error: "Not your request" });
+  }
+
+  r.status = "COMPLETED";
+  res.json({ request: r });
+});
+
+// -------- Server + WS ----------
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+wss.on("connection", (ws) => ws.send(JSON.stringify(syncPayload())));
+
+setInterval(() => {
+  dispatchOnce();
+  broadcast(wss, syncPayload());
+}, 800);
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, "0.0.0.0", () => console.log(`Backend running on http://0.0.0.0:${PORT}`));

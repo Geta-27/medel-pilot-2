@@ -1,251 +1,17 @@
-const scheduleRoutes=require("./src/routes/scheduleRoutes.cjs");
-const providerRoutes=require("./src/routes/providerRoutes.cjs");
 const http = require("http");
 const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
 const { WebSocketServer } = require("ws");
-const opportunitiesRoutes=require("./src/routes/opportunitiesRoutes.cjs");
-const bookingsRoutes=require("./src/routes/bookingsRoutes.cjs");
-const autoMatchRoutes=require("./src/routes/autoMatchRoutes.cjs");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// =========================
-// SLOT LOCKING (MVP PATCH)
-// =========================
-const SLOT_HOLD_MS = 90 * 1000;
-const slotLocks = new Map();
-
-function nowMs() {
-  return Date.now();
-}
-
-function slotKey(providerId, slotStart, slotEnd) {
-  return `${String(providerId)}__${String(slotStart)}__${String(slotEnd)}`;
-}
-
-function isExpiredLock(lock) {
-  return !lock || lock.expiresAt <= nowMs();
-}
-
-function cleanupExpiredSlotLocks() {
-  const now = nowMs();
-  for (const [key, lock] of slotLocks.entries()) {
-    if (!lock || lock.expiresAt <= now) {
-      slotLocks.delete(key);
-    }
-  }
-}
-
-setInterval(cleanupExpiredSlotLocks, 15 * 1000);
-
-function getActiveSlotLock(providerId, slotStart, slotEnd) {
-  cleanupExpiredSlotLocks();
-  const key = slotKey(providerId, slotStart, slotEnd);
-  const lock = slotLocks.get(key);
-  if (!lock) return null;
-  if (isExpiredLock(lock)) {
-    slotLocks.delete(key);
-    return null;
-  }
-  return lock;
-}
-
-function acquireSlotLock({ requestId, providerId, slotStart, slotEnd }) {
-  cleanupExpiredSlotLocks();
-  const key = slotKey(providerId, slotStart, slotEnd);
-  const existing = slotLocks.get(key);
-
-  if (!existing || isExpiredLock(existing)) {
-    const lock = {
-      requestId,
-      providerId,
-      slotStart,
-      slotEnd,
-      createdAt: new Date().toISOString(),
-      expiresAt: nowMs() + SLOT_HOLD_MS,
-    };
-    slotLocks.set(key, lock);
-    return { ok: true, created: true, lock };
-  }
-
-  if (existing.requestId === requestId) {
-    existing.expiresAt = nowMs() + SLOT_HOLD_MS;
-    return { ok: true, created: false, lock: existing };
-  }
-
-  return {
-    ok: false,
-    reason: "SLOT_ALREADY_HELD",
-    lock: existing,
-  };
-}
-
-function confirmSlotLock({ requestId, providerId, slotStart, slotEnd }) {
-  cleanupExpiredSlotLocks();
-  const key = slotKey(providerId, slotStart, slotEnd);
-  const existing = slotLocks.get(key);
-
-  if (!existing || isExpiredLock(existing)) {
-    if (existing && isExpiredLock(existing)) slotLocks.delete(key);
-    return { ok: false, reason: "LOCK_NOT_FOUND_OR_EXPIRED" };
-  }
-
-  if (existing.requestId !== requestId) {
-    return { ok: false, reason: "LOCK_OWNED_BY_OTHER_REQUEST", lock: existing };
-  }
-
-  return { ok: true, lock: existing };
-}
-
-function releaseSlotLock({ requestId, providerId, slotStart, slotEnd, force = false }) {
-  cleanupExpiredSlotLocks();
-  const key = slotKey(providerId, slotStart, slotEnd);
-  const existing = slotLocks.get(key);
-
-  if (!existing) return { ok: true, released: false };
-
-  if (force || existing.requestId === requestId) {
-    slotLocks.delete(key);
-    return { ok: true, released: true };
-  }
-
-  return { ok: false, reason: "LOCK_OWNED_BY_OTHER_REQUEST", lock: existing };
-}
-
-app.get("/api/slots/locks", (_req, res) => {
-  cleanupExpiredSlotLocks();
-  res.json({
-    ok: true,
-    count: slotLocks.size,
-    locks: Array.from(slotLocks.values()),
-  });
-});
-
-app.post("/api/slots/hold", (req, res) => {
-  const { requestId, providerId, slotStart, slotEnd } = req.body || {};
-
-  if (!requestId || !providerId || !slotStart || !slotEnd) {
-    return res.status(400).json({
-      ok: false,
-      error: "requestId, providerId, slotStart, slotEnd are required",
-    });
-  }
-
-  const result = acquireSlotLock({ requestId, providerId, slotStart, slotEnd });
-
-  if (!result.ok) {
-    return res.status(409).json({
-      ok: false,
-      error: result.reason,
-      heldByRequestId: result.lock?.requestId ?? null,
-      providerId,
-      slotStart,
-      slotEnd,
-      expiresAt: result.lock?.expiresAt ?? null,
-    });
-  }
-
-  return res.json({
-    ok: true,
-    held: true,
-    providerId,
-    slotStart,
-    slotEnd,
-    requestId,
-    expiresAt: result.lock.expiresAt,
-  });
-});
-
-app.post("/api/slots/confirm", (req, res) => {
-  const { requestId, providerId, slotStart, slotEnd } = req.body || {};
-
-  if (!requestId || !providerId || !slotStart || !slotEnd) {
-    return res.status(400).json({
-      ok: false,
-      error: "requestId, providerId, slotStart, slotEnd are required",
-    });
-  }
-
-  const check = confirmSlotLock({ requestId, providerId, slotStart, slotEnd });
-
-  if (!check.ok) {
-    return res.status(409).json({
-      ok: false,
-      error: check.reason,
-      providerId,
-      slotStart,
-      slotEnd,
-    });
-  }
-
-  if (Array.isArray(requests)) {
-    const r = requests.find((x) => x.requestId === requestId);
-    if (r) {
-      r.status = "ASSIGNED";
-      r.assignedProviderId = providerId;
-      r.slotStart = slotStart;
-      r.slotEnd = slotEnd;
-      r.bookingId = r.bookingId || `bk_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    }
-  }
-
-  slotLocks.delete(slotKey(providerId, slotStart, slotEnd));
-
-  return res.json({
-    ok: true,
-    confirmed: true,
-    requestId,
-    providerId,
-    slotStart,
-    slotEnd,
-  });
-});
-
-app.post("/api/slots/release", (req, res) => {
-  const { requestId, providerId, slotStart, slotEnd } = req.body || {};
-
-  if (!requestId || !providerId || !slotStart || !slotEnd) {
-    return res.status(400).json({
-      ok: false,
-      error: "requestId, providerId, slotStart, slotEnd are required",
-    });
-  }
-
-  const result = releaseSlotLock({ requestId, providerId, slotStart, slotEnd });
-
-  if (!result.ok) {
-    return res.status(409).json({
-      ok: false,
-      error: result.reason,
-    });
-  }
-
-  return res.json({
-    ok: true,
-    released: result.released,
-  });
-});
-
-// =========================
-// END SLOT LOCKING PATCH
-// =========================
-
-
-app.use('/api',scheduleRoutes);
-app.use('/api',providerRoutes);
-app.use('/api',opportunitiesRoutes);
-app.use('/api',bookingsRoutes);
-app.use('/api',autoMatchRoutes);
-
-
 const now = () => Date.now();
 
 // -------- Tunables ----------
-const ASSIGN_TTL_MS = 120000;      // offer expires in 20s → reroute
+const ASSIGN_TTL_MS = 20000;      // offer expires in 20s → reroute
 const STALE_PROVIDER_MS = 20000;  // provider must heartbeat within 20s
 
 // -------- State (in-memory) ----------
@@ -454,23 +220,19 @@ app.post("/api/providers/heartbeat", (req, res) => {
 app.get("/api/requests", (_req, res) => res.json({ requests: requests.slice().sort((a,b)=>b.createdAt-a.createdAt) }));
 
 app.post("/api/requests", (req, res) => {
-  const body = req.body || {};
-  const crypto = require("crypto");
+  const b = req.body || {};
+  const id = crypto.randomUUID();
 
-  const requestId = String(
-    body.requestId || `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  );
+  const r = {
+    id,
+    createdAt: now(),
+    patientName: norm(b.patientName) || "Patient",
+    reason: norm(b.reason),
+    locationText: norm(b.locationText),
+    insurance: norm(b.insurance),
+    language: norm(b.language),
+    specialty: norm(b.specialty),
 
-  const request = {
-    id: crypto.randomUUID(),
-    requestId,
-    createdAt: Date.now(),
-    patientName: body.patientName || "Patient",
-    reason: body.reason || "",
-    locationText: body.locationText || "",
-    insurance: String(body.insurance || "").toLowerCase(),
-    language: String(body.language || "").toLowerCase(),
-    specialty: String(body.specialty || "").replace(/_/g, " ").toLowerCase(),
     status: "PENDING",
     assignedProviderId: null,
     providerName: null,
@@ -478,78 +240,30 @@ app.post("/api/requests", (req, res) => {
     assignExpiresAt: null,
     reroutes: 0,
     triedProviderIds: [],
-    slotStart: body.slotStart || null,
-    slotEnd: body.slotEnd || null,
-    bookingId: null,
   };
 
-  requests.push(request);
-
-  return res.json({
-    ok: true,
-    request,
-  });
+  requests.push(r);
+  dispatchOnce();
+  res.json({ request: r });
 });
 
+// Offer → Accept: only the assigned provider can accept while ASSIGNED
 app.post("/api/requests/:id/accept", (req, res) => {
-  const id = String(req.params.id);
-  const { providerId, slotStart, slotEnd } = req.body || {};
+  const b = req.body || {};
+  const providerId = norm(b.providerId);
+  const providerName = norm(b.providerName) || "Provider";
 
-  if (!Array.isArray(requests)) {
-    return res.status(500).json({
-      ok: false,
-      error: "requests store not available",
-    });
-  }
+  const r = requests.find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: "Not found" });
 
-  const r = requests.find((x) =>
-    String(x.id) === id || String(x.requestId) === id
-  );
-
-  if (!r) {
-    return res.status(404).json({
-      ok: false,
-      error: "request not found",
-      id,
-    });
-  }
-
-  const mustUseSlotLock = providerId && slotStart && slotEnd;
-
-  if (mustUseSlotLock) {
-    const check = confirmSlotLock({
-      requestId: r.requestId || id,
-      providerId,
-      slotStart,
-      slotEnd,
-    });
-
-    if (!check.ok) {
-      return res.status(409).json({
-        ok: false,
-        error: check.reason,
-        requestId: r.requestId || id,
-        providerId,
-        slotStart,
-        slotEnd,
-      });
-    }
-
-    slotLocks.delete(slotKey(providerId, slotStart, slotEnd));
-
-    r.assignedProviderId = providerId;
-    r.slotStart = slotStart;
-    r.slotEnd = slotEnd;
-    r.bookingId = r.bookingId || `bk_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  }
+  if (r.status !== "ASSIGNED") return res.status(400).json({ error: "Not assigned" });
+  if (!providerId) return res.status(400).json({ error: "providerId required" });
+  if (r.assignedProviderId !== providerId) return res.status(403).json({ error: "Not your offer" });
 
   r.status = "ACCEPTED";
-  r.assignedAt = Date.now();
+  r.providerName = providerName;
 
-  return res.json({
-    ok: true,
-    request: r,
-  });
+  res.json({ request: r });
 });
 
 app.post("/api/requests/:id/complete", (req, res) => {

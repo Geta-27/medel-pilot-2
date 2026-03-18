@@ -4,3 +4,12 @@ dist/
 .env*
 *.log
 src/.App.jsx.swp
+.vercel
+.env*.local
+.env
+node_modules
+.DS_Store
+*.jsonl
+logs/
+*.backup.*
+*.bak.*

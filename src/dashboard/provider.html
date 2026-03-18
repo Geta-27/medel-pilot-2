@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CareX — Provider Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0f0d;
+    --surface:   #111712;
+    --surface2:  #172019;
+    --border:    #1e2b20;
+    --border2:   #2a3d2d;
+    --green:     #3ddc84;
+    --green-dim: #1e6b40;
+    --amber:     #f5a623;
+    --amber-dim: #7a4d08;
+    --red:       #ff5b5b;
+    --red-dim:   #6b1f1f;
+    --text:      #d4e8d0;
+    --text2:     #7a9e80;
+    --text3:     #3d5c42;
+    --mono:      'DM Mono', monospace;
+    --serif:     'Fraunces', serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--green);
+    letter-spacing: -0.5px;
+  }
+
+  .logo span { font-style: italic; }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .online-pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    transition: all 0.3s;
+  }
+
+  .online-pill.online  { background: #0d2b1a; color: var(--green); border: 1px solid var(--green-dim); }
+  .online-pill.offline { background: #1e1208; color: var(--amber); border: 1px solid var(--amber-dim); }
+
+  .pulse {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+
+  .pulse.offline { background: var(--amber); animation: none; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.85); }
+  }
+
+  .notif-btn {
+    position: relative;
+    background: none;
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 12px;
+    transition: border-color 0.2s;
+  }
+  .notif-btn:hover { border-color: var(--green-dim); color: var(--green); }
+  .notif-badge {
+    position: absolute;
+    top: -5px; right: -5px;
+    background: var(--amber);
+    color: #0a0f0d;
+    border-radius: 50%;
+    width: 16px; height: 16px;
+    font-size: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 500;
+  }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: calc(100vh - 57px);
+  }
+
+  /* ── SIDEBAR ── */
+  nav {
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    position: sticky;
+    top: 57px;
+    height: calc(100vh - 57px);
+    overflow-y: auto;
+  }
+
+  .nav-section {
+    padding: 0 16px;
+    margin-bottom: 24px;
+  }
+
+  .nav-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text3);
+    padding: 0 4px;
+    margin-bottom: 8px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text2);
+    transition: all 0.15s;
+    border: 1px solid transparent;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: none;
+    width: 100%;
+    text-align: left;
+  }
+
+  .nav-item:hover  { background: var(--surface); color: var(--text); }
+  .nav-item.active { background: var(--surface2); color: var(--green); border-color: var(--border2); }
+
+  .nav-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text3);
+    flex-shrink: 0;
+  }
+  .nav-item.active .nav-dot { background: var(--green); }
+
+  /* ── MAIN CONTENT ── */
+  main {
+    padding: 28px;
+    overflow-y: auto;
+  }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .page-title {
+    font-family: var(--serif);
+    font-size: 26px;
+    font-weight: 300;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+  }
+
+  .page-sub {
+    color: var(--text2);
+    font-size: 12px;
+    margin-bottom: 28px;
+  }
+
+  /* ── METRIC CARDS ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    transition: border-color 0.2s;
+  }
+
+  .metric-card:hover { border-color: var(--border2); }
+
+  .metric-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text3);
+    margin-bottom: 8px;
+  }
+
+  .metric-val {
+    font-family: var(--serif);
+    font-size: 32px;
+    font-weight: 300;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .metric-val.green  { color: var(--green); }
+  .metric-val.amber  { color: var(--amber); }
+  .metric-val.red    { color: var(--red); }
+  .metric-val.white  { color: var(--text); }
+
+  .metric-sub {
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  /* ── SECTION ── */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  .section-action {
+    font-size: 11px;
+    color: var(--text2);
+    background: none;
+    border: 1px solid var(--border2);
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: all 0.15s;
+  }
+  .section-action:hover { border-color: var(--green-dim); color: var(--green); }
+
+  /* ── CAPACITY BAR ── */
+  .cap-bar-wrap {
+    padding: 18px;
+  }
+
+  .cap-bar-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  .cap-bar {
+    height: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+
+  .cap-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.8s ease;
+  }
+
+  .cap-bar-fill.good   { background: var(--green); }
+  .cap-bar-fill.warn   { background: var(--amber); }
+  .cap-bar-fill.danger { background: var(--red); }
+
+  .slot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+    gap: 6px;
+    padding: 0 18px 18px;
+  }
+
+  .slot-chip {
+    padding: 5px 4px;
+    border-radius: 5px;
+    font-size: 10px;
+    text-align: center;
+    border: 1px solid;
+    cursor: default;
+    transition: transform 0.1s;
+  }
+
+  .slot-chip:hover { transform: scale(1.05); }
+  .slot-chip.booked     { background: #0d2b1a; color: var(--green);  border-color: var(--green-dim); }
+  .slot-chip.available  { background: #1e2b20; color: var(--text2);  border-color: var(--border2); }
+  .slot-chip.veto       { background: #2b1e08; color: var(--amber);  border-color: var(--amber-dim); animation: blink 1s infinite; }
+  .slot-chip.marketplace{ background: #0f1e2b; color: #5bb4f5;       border-color: #1e3d6b; }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* ── VETO CARD ── */
+  .veto-card {
+    margin: 0 18px 12px;
+    padding: 14px 16px;
+    background: var(--bg);
+    border: 1px solid var(--amber-dim);
+    border-radius: 8px;
+    border-left: 3px solid var(--amber);
+  }
+
+  .veto-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .veto-time { font-size: 14px; color: var(--text); font-weight: 500; }
+  .veto-countdown {
+    font-family: var(--mono);
+    font-size: 20px;
+    color: var(--amber);
+    font-weight: 500;
+  }
+
+  .veto-msg { font-size: 12px; color: var(--text2); margin-bottom: 12px; }
+
+  .veto-actions { display: flex; gap: 8px; }
+
+  .btn {
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .btn-veto    { background: #2b1408; color: var(--red);   border-color: var(--red-dim); }
+  .btn-confirm { background: #0d2b1a; color: var(--green); border-color: var(--green-dim); }
+  .btn-veto:hover    { background: var(--red-dim); }
+  .btn-confirm:hover { background: var(--green-dim); }
+
+  /* ── AUDIT LOG ── */
+  .audit-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+
+  .audit-row:last-child { border-bottom: none; }
+  .audit-row:hover { background: var(--surface2); }
+
+  .audit-icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .audit-icon.green { background: #0d2b1a; color: var(--green); }
+  .audit-icon.amber { background: #2b1e08; color: var(--amber); }
+  .audit-icon.red   { background: #2b0f0f; color: var(--red); }
+  .audit-icon.gray  { background: var(--surface2); color: var(--text2); }
+
+  .audit-content { flex: 1; }
+  .audit-action  { font-size: 12px; color: var(--text); margin-bottom: 2px; }
+  .audit-meta    { font-size: 11px; color: var(--text3); }
+
+  /* ── RULES FORM ── */
+  .rules-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .rule-item { display: flex; flex-direction: column; gap: 6px; }
+  .rule-label { font-size: 11px; color: var(--text2); }
+
+  .rule-select, .rule-input {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .rule-select:focus, .rule-input:focus { border-color: var(--green-dim); }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .toggle-label { font-size: 12px; color: var(--text2); }
+
+  .toggle {
+    position: relative;
+    width: 36px; height: 20px;
+  }
+
+  .toggle input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border2);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .toggle-slider:before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    left: 3px; top: 3px;
+    background: var(--text2);
+    border-radius: 50%;
+    transition: all 0.2s;
+  }
+
+  .toggle input:checked + .toggle-slider { background: var(--green-dim); }
+  .toggle input:checked + .toggle-slider:before {
+    transform: translateX(16px);
+    background: var(--green);
+  }
+
+  .save-btn {
+    margin: 0 18px 18px;
+    width: calc(100% - 36px);
+    padding: 10px;
+    background: var(--green-dim);
+    color: var(--green);
+    border: 1px solid var(--green-dim);
+    border-radius: 7px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+
+  .save-btn:hover { background: #1e5533; }
+
+  /* ── NOTIFICATION BANNER ── */
+  .notif-banner {
+    position: fixed;
+    top: 70px; right: 20px;
+    background: var(--surface);
+    border: 1px solid var(--amber-dim);
+    border-left: 3px solid var(--amber);
+    border-radius: 8px;
+    padding: 14px 16px;
+    width: 320px;
+    z-index: 200;
+    display: none;
+    animation: slideIn 0.3s ease;
+  }
+
+  .notif-banner.show { display: block; }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .notif-title { font-size: 12px; color: var(--amber); font-weight: 500; margin-bottom: 4px; }
+  .notif-body  { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
+  .notif-close {
+    position: absolute;
+    top: 10px; right: 10px;
+    background: none; border: none;
+    color: var(--text2); cursor: pointer; font-size: 14px;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { display: none; }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Care<span>X</span></div>
+  <div class="header-right">
+    <div class="online-pill online" id="onlinePill">
+      <div class="pulse" id="pulseIndicator"></div>
+      <span id="onlineLabel">Online — 3 slots open</span>
+    </div>
+    <button class="notif-btn" onclick="showNotifications()">
+      Alerts
+      <span class="notif-badge" id="notifBadge">2</span>
+    </button>
+    <span style="color:var(--text3);font-size:11px;">Dr. Sarah Chen</span>
+  </div>
+</header>
+
+<div class="layout">
+  <nav>
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <button class="nav-item active" onclick="showPage('dashboard', this)">
+        <div class="nav-dot"></div> Dashboard
+      </button>
+      <button class="nav-item" onclick="showPage('capacity', this)">
+        <div class="nav-dot"></div> Capacity
+      </button>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Agent</div>
+      <button class="nav-item" onclick="showPage('rules', this)">
+        <div class="nav-dot"></div> Standing Rules
+      </button>
+      <button class="nav-item" onclick="showPage('audit', this)">
+        <div class="nav-dot"></div> Audit Trail
+      </button>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Bookings</div>
+      <button class="nav-item" onclick="showPage('slots', this)">
+        <div class="nav-dot"></div> Today's Slots
+      </button>
+      <button class="nav-item" onclick="showPage('waitlist', this)">
+        <div class="nav-dot"></div> Waitlist
+      </button>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Settings</div>
+      <button class="nav-item" onclick="showPage('connect', this)">
+        <div class="nav-dot"></div> Calendar Connect
+      </button>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-title">Dashboard</div>
+      <div class="page-sub">Real-time capacity and agent activity — Sunday, March 15</div>
+
+      <div class="metrics">
+        <div class="metric-card">
+          <div class="metric-label">Utilization</div>
+          <div class="metric-val amber" id="metricUtil">67%</div>
+          <div class="metric-sub">10 of 15 slots filled</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Unused slots</div>
+          <div class="metric-val green" id="metricUnused">5</div>
+          <div class="metric-sub">3 open to marketplace</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Revenue recovered</div>
+          <div class="metric-val white">$660</div>
+          <div class="metric-sub">3 marketplace slots today</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Agent signals</div>
+          <div class="metric-val green">14</div>
+          <div class="metric-sub">Since 8:00am today</div>
+        </div>
+      </div>
+
+      <!-- Active Veto Window -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">⚡ Active veto window</div>
+          <span style="font-size:11px;color:var(--amber)">Requires action</span>
+        </div>
+        <div class="veto-card" id="vetoCard">
+          <div class="veto-top">
+            <div>
+              <div class="veto-time">2:30 PM slot — cancellation detected</div>
+              <div class="veto-msg">Agent matched waitlist patient (98% compatibility). Auto-assigning in:</div>
+            </div>
+            <div class="veto-countdown" id="vetoCountdown">01:24</div>
+          </div>
+          <div class="veto-actions">
+            <button class="btn btn-veto"    onclick="handleVeto('veto')">Veto</button>
+            <button class="btn btn-confirm" onclick="handleVeto('confirm')">Confirm Now</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Today's Schedule -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">Today's schedule</div>
+          <div style="font-size:11px;color:var(--text2)">
+            <span style="color:var(--green)">■</span> Booked &nbsp;
+            <span style="color:var(--text3)">■</span> Open &nbsp;
+            <span style="color:#5bb4f5">■</span> Marketplace &nbsp;
+            <span style="color:var(--amber)">■</span> Veto pending
+          </div>
+        </div>
+        <div class="cap-bar-wrap">
+          <div class="cap-bar-label">
+            <span>Capacity</span>
+            <span id="capBarLabel">10 / 15</span>
+          </div>
+          <div class="cap-bar">
+            <div class="cap-bar-fill warn" id="capBarFill" style="width:67%"></div>
+          </div>
+        </div>
+        <div class="slot-grid" id="slotGrid"></div>
+      </div>
+    </div>
+
+    <!-- CAPACITY -->
+    <div class="page" id="page-capacity">
+      <div class="page-title">Capacity intelligence</div>
+      <div class="page-sub">Declared vs observed — your hidden revenue</div>
+      <div class="metrics">
+        <div class="metric-card">
+          <div class="metric-label">This week avg</div>
+          <div class="metric-val amber">71%</div>
+          <div class="metric-sub">Target: 85%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Slots recovered</div>
+          <div class="metric-val green">18</div>
+          <div class="metric-sub">Last 7 days</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Revenue unlocked</div>
+          <div class="metric-val white">$3,960</div>
+          <div class="metric-sub">Last 7 days</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">No-show predicted</div>
+          <div class="metric-val amber">2</div>
+          <div class="metric-sub">Today, pre-marketed</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">Gap pattern — last 7 days</div>
+        </div>
+        <div style="padding:18px">
+          <div id="patternChart" style="display:flex;align-items:flex-end;gap:8px;height:100px"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;font-size:10px;color:var(--text3)">
+            <span style="flex:1;text-align:center">Mon</span><span style="flex:1;text-align:center">Tue</span>
+            <span style="flex:1;text-align:center">Wed</span><span style="flex:1;text-align:center">Thu</span>
+            <span style="flex:1;text-align:center">Fri</span><span style="flex:1;text-align:center">Sat</span>
+            <span style="flex:1;text-align:center">Sun</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RULES -->
+    <div class="page" id="page-rules">
+      <div class="page-title">Standing rules</div>
+      <div class="page-sub">Set once — agent acts automatically</div>
+      <div class="section">
+        <div class="section-head"><div class="section-title">Automation</div></div>
+        <div class="rules-grid">
+          <div class="rule-item">
+            <div class="rule-label">Automation level</div>
+            <select class="rule-select" id="ruleAutomation">
+              <option value="off">Off — I'll manage manually</option>
+              <option value="suggest">Suggest — notify me first</option>
+              <option value="auto_with_veto" selected>Auto + veto window</option>
+              <option value="full_auto">Full auto</option>
+            </select>
+          </div>
+          <div class="rule-item">
+            <div class="rule-label">Veto window (seconds)</div>
+            <input class="rule-input" type="number" id="ruleVetoWindow" value="90" min="30" max="300">
+          </div>
+          <div class="rule-item">
+            <div class="rule-label">Max marketplace slots / day</div>
+            <input class="rule-input" type="number" id="ruleMaxSlots" value="3" min="1" max="15">
+          </div>
+          <div class="rule-item">
+            <div class="rule-label">Min lead time (hours)</div>
+            <input class="rule-input" type="number" id="ruleLeadTime" value="1" min="0" max="48">
+          </div>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">Auto-act on cancellations</span>
+          <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">Auto-act on no-shows</span>
+          <label class="toggle"><input type="checkbox"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">Accept new patients</span>
+          <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">Notify via SMS</span>
+          <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+        </div>
+        <button class="save-btn" onclick="saveRules()">Save rules</button>
+      </div>
+    </div>
+
+    <!-- AUDIT -->
+    <div class="page" id="page-audit">
+      <div class="page-title">Audit trail</div>
+      <div class="page-sub">Every agent action, fully transparent</div>
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">Recent activity</div>
+          <button class="section-action">Export CSV</button>
+        </div>
+        <div id="auditList"></div>
+      </div>
+    </div>
+
+    <!-- SLOTS -->
+    <div class="page" id="page-slots">
+      <div class="page-title">Today's slots</div>
+      <div class="page-sub">All 15 scheduled slots — tap to manage</div>
+      <div class="section">
+        <div id="slotList" style="padding:8px 0"></div>
+      </div>
+    </div>
+
+    <!-- WAITLIST -->
+    <div class="page" id="page-waitlist">
+      <div class="page-title">Waitlist</div>
+      <div class="page-sub">7 patients waiting for your specialty</div>
+      <div class="section">
+        <div class="section-head"><div class="section-title">Matched patients</div></div>
+        <div id="waitlistList"></div>
+      </div>
+    </div>
+
+    <!-- CONNECT -->
+    <div class="page" id="page-connect">
+      <div class="page-title">Calendar connect</div>
+      <div class="page-sub">Connect your schedule — no EMR integration needed</div>
+      <div class="section">
+        <div class="section-head"><div class="section-title">Connected sources</div></div>
+        <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--bg);border:1px solid var(--green-dim);border-radius:8px">
+            <div>
+              <div style="font-size:13px;color:var(--text);margin-bottom:3px">Google Calendar</div>
+              <div style="font-size:11px;color:var(--text2)">Connected · dr.chen@gmail.com · Read-only</div>
+            </div>
+            <span style="font-size:11px;color:var(--green)">● Active</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--bg);border:1px solid var(--border2);border-radius:8px">
+            <div>
+              <div style="font-size:13px;color:var(--text);margin-bottom:3px">Email agent</div>
+              <div style="font-size:11px;color:var(--text2)">Forward to: drchen-abc123@scheduling.carex.ai</div>
+            </div>
+            <span style="font-size:11px;color:var(--text3)">● Inactive</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--bg);border:1px solid var(--border2);border-radius:8px">
+            <div>
+              <div style="font-size:13px;color:var(--text);margin-bottom:3px">SMS agent</div>
+              <div style="font-size:11px;color:var(--text2)">Scheduling number: +1 (555) 200-CARE</div>
+            </div>
+            <span style="font-size:11px;color:var(--text3)">● Inactive</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Notification Banner -->
+<div class="notif-banner" id="notifBanner">
+  <button class="notif-close" onclick="closeNotif()">✕</button>
+  <div class="notif-title">⚡ Slot auto-filled</div>
+  <div class="notif-body">2:30 PM cancellation filled from waitlist. Patient notified.</div>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────
+const API_BASE    = 'http://localhost:3000';
+const API_KEY     = 'carex-dev-key';
+const PROVIDER_ID = '09c66b29-8b95-4f16-94c9-11c179017155';
+
+// ── API CLIENT ────────────────────────────────────────────────
+async function api(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { 'x-api-key': API_KEY, 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  return res.json();
+}
+
+// ── LIVE DATA ─────────────────────────────────────────────────
+let dashData = null;
+
+async function loadDashboard() {
+  try {
+    showLoading(true);
+    dashData = await api(`/provider/${PROVIDER_ID}/dashboard`);
+    renderAll(dashData);
+    showLoading(false);
+  } catch (err) {
+    showError('Cannot reach API — is the server running?');
+  }
+}
+
+function renderAll(d) {
+  if (!d) return;
+
+  // Header online status
+  const pill  = document.getElementById('onlinePill');
+  const pulse = document.getElementById('pulseIndicator');
+  const label = document.getElementById('onlineLabel');
+  if (d.onlineStatus?.online) {
+    pill.className  = 'online-pill online';
+    pulse.className = 'pulse';
+    label.textContent = `Online — ${d.onlineStatus.availableCount || 0} slots open`;
+  } else {
+    pill.className  = 'online-pill offline';
+    pulse.className = 'pulse offline';
+    label.textContent = d.onlineStatus?.message || 'Offline';
+  }
+
+  // Metrics
+  const cap = d.capacity || {};
+  document.getElementById('metricUtil').textContent  = `${cap.utilizationPct ?? 0}%`;
+  document.getElementById('metricUnused').textContent = cap.unusedCount ?? 0;
+  document.getElementById('capBarLabel').textContent  = `${cap.bookedCount ?? 0} / ${cap.declaredDailyMax ?? 15}`;
+
+  const pct = cap.utilizationPct ?? 0;
+  const fill = document.getElementById('capBarFill');
+  fill.style.width = `${pct}%`;
+  fill.className   = `cap-bar-fill ${pct >= 85 ? 'good' : pct >= 50 ? 'warn' : 'danger'}`;
+
+  // Revenue metric
+  const rev = cap.revenueOpportunity;
+  if (rev) {
+    document.querySelector('.metric-card:nth-child(3) .metric-val').textContent =
+      `$${(rev.total || 0).toLocaleString()}`;
+    document.querySelector('.metric-card:nth-child(3) .metric-sub').textContent =
+      `$${(rev.monthly || 0).toLocaleString()}/month potential`;
+  }
+
+  // Signal count
+  document.querySelector('.metric-card:nth-child(4) .metric-val').textContent =
+    d.capacity?.bookedCount ?? 0;
+
+  // Slot grid from capacity unused slots
+  renderSlotGridLive(cap.unusedSlotTimes || [], d.slots?.all || []);
+
+  // Pending vetos
+  renderVetos(d.pendingVetos || []);
+
+  // Audit
+  renderAuditLive(d.recentAudit || []);
+
+  // Slot list
+  renderSlotListLive(d.slots?.all || [], cap.unusedSlotTimes || []);
+
+  // Capacity chart from history
+  loadCapacityHistory();
+
+  // Notifications badge
+  const count = d.notifications?.length || 0;
+  document.getElementById('notifBadge').textContent = count > 0 ? count : '0';
+}
+
+function renderSlotGridLive(unusedSlots, bookedSlots) {
+  const grid = document.getElementById('slotGrid');
+  if (unusedSlots.length === 0 && bookedSlots.length === 0) {
+    grid.innerHTML = '<div style="color:var(--text3);font-size:11px;padding:4px">No slots today</div>';
+    return;
+  }
+
+  const bookedTimes = new Set(bookedSlots.map(s => fmtTime(s.slot_start)));
+  const chips = unusedSlots.map(s => {
+    const t = fmtTime(s.start);
+    return `<div class="slot-chip available" title="${t} — available">${t}</div>`;
+  });
+  bookedSlots.forEach(s => {
+    const t = fmtTime(s.slot_start);
+    chips.push(`<div class="slot-chip booked" title="${t} — booked">${t}</div>`);
+  });
+
+  grid.innerHTML = chips.join('');
+}
+
+function renderVetos(vetos) {
+  const section = document.getElementById('vetoCard').closest('.section');
+  if (!vetos || vetos.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+  const v = vetos[0];
+  document.getElementById('vetoCard').innerHTML = `
+    <div class="veto-top">
+      <div>
+        <div class="veto-time">${fmtTime(v.slotStart)} slot — auto-assignment pending</div>
+        <div class="veto-msg">Agent matched waitlist patient. Auto-assigning in:</div>
+      </div>
+      <div class="veto-countdown" id="vetoCountdown">01:30</div>
+    </div>
+    <div class="veto-actions">
+      <button class="btn btn-veto" onclick="doVeto('${v.eventId}','veto')">Veto</button>
+      <button class="btn btn-confirm" onclick="doVeto('${v.eventId}','confirm')">Confirm Now</button>
+    </div>
+  `;
+  startVetoCountdown(v.timeLeft ? Math.round(v.timeLeft / 1000) : 90);
+}
+
+async function doVeto(eventId, action) {
+  const card = document.getElementById('vetoCard');
+  if (action === 'veto') {
+    await api(`/provider/${PROVIDER_ID}/veto/${eventId}`, { method: 'POST', body: JSON.stringify({ reason: 'provider_veto' }) });
+    card.innerHTML = `<div style="color:var(--red);font-size:13px;padding:4px 0">✕ Vetoed — slot returned to pool</div>`;
+  } else {
+    card.innerHTML = `<div style="color:var(--green);font-size:13px;padding:4px 0">✓ Confirmed — patient notified</div>`;
+  }
+  setTimeout(() => { card.closest('.section').style.display = 'none'; }, 2000);
+}
+
+function renderAuditLive(logs) {
+  const el = document.getElementById('auditList');
+  if (!logs || logs.length === 0) {
+    el.innerHTML = '<div class="audit-row"><div class="audit-content"><div class="audit-action" style="color:var(--text3)">No recent activity</div></div></div>';
+    return;
+  }
+  const iconMap = {
+    AGENT_ASSIGN_AUTO: { i: '✓', c: 'green' },
+    AGENT_SLOT_DETECTED: { i: '◎', c: 'green' },
+    AGENT_ASSIGN_VETOED: { i: '✕', c: 'red' },
+    PROVIDER_CONNECTED: { i: '●', c: 'green' },
+    CALENDAR_READ: { i: '◎', c: 'gray' },
+    PHI_SCRUBBED: { i: '🔒', c: 'gray' },
+  };
+  el.innerHTML = logs.map(l => {
+    const ico = iconMap[l.action] || { i: '●', c: 'gray' };
+    return `
+      <div class="audit-row">
+        <div class="audit-icon ${ico.c}">${ico.i}</div>
+        <div class="audit-content">
+          <div class="audit-action">${l.action.replace(/_/g,' ').toLowerCase()}</div>
+          <div class="audit-meta">${timeAgo(l.created_at)}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderSlotListLive(bookedSlots, unusedSlots) {
+  const el = document.getElementById('slotList');
+  const all = [
+    ...bookedSlots.map(s => ({ time: s.slot_start, status: s.status })),
+    ...unusedSlots.map(s => ({ time: s.start, status: 'available' })),
+  ].sort((a, b) => new Date(a.time) - new Date(b.time));
+
+  if (all.length === 0) {
+    el.innerHTML = '<div style="padding:18px;color:var(--text3);font-size:12px">No slots yet today</div>';
+    return;
+  }
+
+  el.innerHTML = all.map(s => `
+    <div class="audit-row">
+      <div class="audit-icon ${s.status==='booked'?'green':s.status==='marketplace'?'gray':'gray'}">
+        ${s.status==='booked'?'✓':s.status==='marketplace'?'◎':'○'}
+      </div>
+      <div class="audit-content">
+        <div class="audit-action">${fmtTime(s.time)} — ${s.status.charAt(0).toUpperCase()+s.status.slice(1)}</div>
+        <div class="audit-meta">${s.status==='booked'?'Patient confirmed':s.status==='marketplace'?'Listed in marketplace':'Available'}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadCapacityHistory() {
+  try {
+    const data = await api(`/provider/${PROVIDER_ID}/capacity`);
+    const history = data.history || [];
+    if (history.length === 0) return;
+    const recent = history.slice(0, 7).reverse();
+    const max = Math.max(...recent.map(d => d.utilization_pct || 0), 1);
+    document.getElementById('patternChart').innerHTML = recent.map(d => {
+      const v = d.utilization_pct || 0;
+      const day = new Date(d.report_date).toLocaleDateString('en', { weekday: 'short' });
+      return `
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="font-size:10px;color:${v<75?'var(--amber)':'var(--green)'}">${v}%</div>
+          <div style="width:100%;height:${Math.max(4,Math.round(v/max*80))}px;background:${v<75?'var(--amber-dim)':'var(--green-dim)'};border-radius:3px 3px 0 0;border-top:1px solid ${v<75?'var(--amber)':'var(--green)'}"></div>
+        </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function saveRules() {
+  const payload = {
+    automationLevel:        document.getElementById('ruleAutomation').value,
+    vetoWindowMs:           parseInt(document.getElementById('ruleVetoWindow').value) * 1000,
+    maxMarketplaceSlotsDay: parseInt(document.getElementById('ruleMaxSlots').value),
+    minLeadTimeHours:       parseInt(document.getElementById('ruleLeadTime').value),
+  };
+  const result = await api(`/provider/${PROVIDER_ID}/rules`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  const btn = document.querySelector('.save-btn');
+  btn.textContent = result.success ? '✓ Saved to database' : '✗ Error saving';
+  setTimeout(() => { btn.textContent = 'Save rules'; }, 2500);
+}
+
+// ── HELPERS ───────────────────────────────────────────────────
+function fmtTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24)  return `${hrs} hr ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function showLoading(on) {
+  const label = document.getElementById('onlineLabel');
+  if (on) label.textContent = 'Loading...';
+}
+
+function showError(msg) {
+  document.getElementById('onlineLabel').textContent = msg;
+  document.getElementById('onlinePill').className = 'online-pill offline';
+}
+
+// ── VETO COUNTDOWN ────────────────────────────────────────────
+let vetoTimer = null;
+function startVetoCountdown(secs = 90) {
+  if (vetoTimer) clearInterval(vetoTimer);
+  let remaining = secs;
+  const el = document.getElementById('vetoCountdown');
+  if (!el) return;
+  vetoTimer = setInterval(() => {
+    if (remaining <= 0) { clearInterval(vetoTimer); return; }
+    remaining--;
+    const m = Math.floor(remaining/60).toString().padStart(2,'0');
+    const s = (remaining%60).toString().padStart(2,'0');
+    if (el) { el.textContent = `${m}:${s}`; if (remaining < 20) el.style.color = 'var(--red)'; }
+  }, 1000);
+}
+
+// ── NAV ───────────────────────────────────────────────────────
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function showNotifBanner() {
+  document.getElementById('notifBanner').classList.add('show');
+  setTimeout(closeNotif, 6000);
+}
+function closeNotif() {
+  document.getElementById('notifBanner').classList.remove('show');
+}
+function showNotifications() {
+  document.getElementById('notifBadge').textContent = '0';
+  showPage('audit', document.querySelectorAll('.nav-item')[3]);
+}
+
+// ── BOOT ──────────────────────────────────────────────────────
+loadDashboard();
+// Refresh every 30 seconds
+setInterval(loadDashboard, 30000);
+</script>
+</body>
+</html>
