@@ -14,9 +14,13 @@
 const { createClient } = require('@supabase/supabase-js');
 
 // ─── Client ──────────────────────────────────────────────────
+if (!process.env.SUPABASE_URL) {
+  console.error('FATAL: SUPABASE_URL environment variable is not set');
+  process.exit(1);
+}
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY  // Service key for server-side — never expose to client
+  process.env.SUPABASE_SERVICE_KEY
 );
 
 // ─── PROVIDERS ───────────────────────────────────────────────
