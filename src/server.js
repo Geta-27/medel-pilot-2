@@ -526,6 +526,7 @@ app.post('/marketplace/waitlist', async (req, res) => {
 
 // ─── HEALTH CHECK ─────────────────────────────────────────────
 app.use(require('express').static('src/dashboard'));
+app.get('/', (req, res) => res.redirect('/patient.html'));
 app.get('/health', (req, res) => {
   res.json({
     status:  'ok',
