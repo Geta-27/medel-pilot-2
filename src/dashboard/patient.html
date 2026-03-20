@@ -117,25 +117,28 @@
       <select id="specialtyFilter">
         <option value="">Any specialty</option>
         <option value="dermatology">Dermatology</option>
-        <option value="primary_care">Primary Care</option>
-        <option value="cardiology">Cardiology</option>
-        <option value="orthopedics">Orthopedics</option>
         <option value="psychiatry">Psychiatry</option>
-        <option value="gynecology">Gynecology</option>
-        <option value="urgent_care">Urgent Care</option>
         <option value="gastroenterology">Gastroenterology (GI)</option>
-        <option value="endocrinology">Endocrinology</option>
-        <option value="rheumatology">Rheumatology</option>
-        <option value="ophthalmology">Ophthalmology</option>
-        <option value="podiatry">Podiatry</option>
-        <option value="physical_therapy">Physical Therapy</option>
         <option value="neurology">Neurology</option>
+        <option value="rheumatology">Rheumatology</option>
+        <option value="obgyn">OB/GYN</option>
+        <option value="cardiology">Cardiology</option>
+        <option value="ophthalmology">Ophthalmology</option>
+        <option value="hematology_oncology">Hematology / Oncology</option>
+        <option value="endocrinology">Endocrinology</option>
+        <option value="neurosurgery">Neurosurgery</option>
+        <option value="ent">ENT (Ear, Nose & Throat)</option>
+        <option value="orthopedic_surgery">Orthopedic Surgery</option>
         <option value="urology">Urology</option>
         <option value="pulmonology">Pulmonology</option>
         <option value="nephrology">Nephrology</option>
-        <option value="oncology">Oncology</option>
-        <option value="ent">ENT (Ear, Nose & Throat)</option>
         <option value="allergy">Allergy & Immunology</option>
+        <option value="physical_therapy">Physical Therapy</option>
+        <option value="podiatry">Podiatry</option>
+        <option value="sleep_medicine">Sleep Medicine</option>
+        <option value="primary_care">Primary Care</option>
+        <option value="gynecology">Gynecology</option>
+        <option value="urgent_care">Urgent Care</option>
       </select>
       <select id="insuranceFilter">
         <option value="">Any insurance</option>
@@ -239,9 +242,17 @@
 
   function specialtyLabel(s) {
     const map = {
-      dermatology: 'Dermatology', primary_care: 'Primary Care',
-      cardiology: 'Cardiology', orthopedics: 'Orthopedics',
-      psychiatry: 'Psychiatry', gynecology: 'Gynecology', urgent_care: 'Urgent Care'
+      dermatology: 'Dermatology', psychiatry: 'Psychiatry',
+      gastroenterology: 'Gastroenterology (GI)', neurology: 'Neurology',
+      rheumatology: 'Rheumatology', obgyn: 'OB/GYN',
+      cardiology: 'Cardiology', ophthalmology: 'Ophthalmology',
+      hematology_oncology: 'Hematology / Oncology', endocrinology: 'Endocrinology',
+      neurosurgery: 'Neurosurgery', ent: 'ENT (Ear, Nose & Throat)',
+      orthopedic_surgery: 'Orthopedic Surgery', urology: 'Urology',
+      pulmonology: 'Pulmonology', nephrology: 'Nephrology',
+      allergy: 'Allergy & Immunology', physical_therapy: 'Physical Therapy',
+      podiatry: 'Podiatry', sleep_medicine: 'Sleep Medicine',
+      primary_care: 'Primary Care', gynecology: 'Gynecology', urgent_care: 'Urgent Care'
     };
     return map[s] || s || 'General';
   }
