@@ -33,7 +33,7 @@ router.post("/opportunities/:id/hold", async (req, res) => {
     await upsertSlot({ ...slot, status: "HELD_BY_CAREX", heldByCareX: true });
     res.json({ ok:true, booking });
   } catch (e) {
-    res.status(500).json({ ok:false, error:e.message });
+    res.status(500).json({ ok:false, error: e?.message || e?.stack || JSON.stringify(e) || 'Unknown booking error' });
   }
 });
 
@@ -94,7 +94,7 @@ router.post("/bookings", async (req, res) => {
       }
     });
   } catch (e) {
-    res.status(500).json({ ok:false, error:e.message });
+    res.status(500).json({ ok:false, error: e?.message || e?.stack || JSON.stringify(e) || 'Unknown booking error' });
   }
 });
 
@@ -120,7 +120,7 @@ router.post("/bookings/:id/veto", async (req, res) => {
 
     res.json({ ok:true, booking: updated });
   } catch (e) {
-    res.status(500).json({ ok:false, error:e.message });
+    res.status(500).json({ ok:false, error: e?.message || e?.stack || JSON.stringify(e) || 'Unknown booking error' });
   }
 });
 
@@ -129,7 +129,7 @@ router.get("/bookings", async (req, res) => {
     const bookings = await listBookings();
     res.json({ ok:true, bookings });
   } catch (e) {
-    res.status(500).json({ ok:false, error:e.message });
+    res.status(500).json({ ok:false, error: e?.message || e?.stack || JSON.stringify(e) || 'Unknown booking error' });
   }
 });
 
@@ -139,7 +139,7 @@ router.get("/bookings/debug", async (req, res) => {
     const bookings = await listBookings();
     res.json({ ok:true, count: bookings.length, bookings });
   } catch (e) {
-    res.status(500).json({ ok:false, error:e.message });
+    res.status(500).json({ ok:false, error: e?.message || e?.stack || JSON.stringify(e) || 'Unknown booking error' });
   }
 });
 
