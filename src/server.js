@@ -59,6 +59,8 @@ const { setStandingRules, getStandingRules,
         runCapacityPipeline }                     = require('./engine3/standingRules');
 const { scoreSchedule }                           = require('./engine3/noShowPredictor');
 const db                                          = require('./database/db');
+const opportunitiesRoutes                         = require('./routes/opportunitiesRoutes.cjs');
+const bookingsRoutes                              = require('./routes/bookingsRoutes.cjs');
 
 // ─── Auth Middleware ──────────────────────────────────────────
 // Simple API key check — replace with Supabase JWT in production
