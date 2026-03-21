@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareX - Find Care</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f7f9fc; color: #111827; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
+    .hero { background: linear-gradient(135deg,#2563eb,#1d4ed8); color: white; border-radius: 18px; padding: 32px; margin-bottom: 20px; }
+    .card { background: white; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    input, select, button, textarea {
+      width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; box-sizing: border-box; font-size: 14px;
+    }
+    button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 600; }
+    .slot { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 12px; background: #fff; }
+    .muted { color: #6b7280; font-size: 14px; }
+    .row { display: flex; justify-content: space-between; gap: 12px; align-items: start; flex-wrap: wrap; }
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:700; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>See a doctor this week — no waiting, no referral needed</h1>
+      <p>Real openings from cancellations and same-day slots. Search by specialty, insurance, and location.</p>
+    </div>
+
+    <div class="card">
+      <h2>Search</h2>
+      <div class="grid">
+        <div>
+          <label for="specialty">Specialty</label>
+          <select id="specialty">
+            <option value="">Select specialty</option>
+            <option value="primary_care">Primary Care</option>
+            <option value="urgent_care">Urgent Care</option>
+            <option value="cardiology">Cardiology</option>
+            <option value="dermatology">Dermatology</option>
+            <option value="pediatrics">Pediatrics</option>
+          </select>
+        </div>
+        <div>
+          <label for="insurance">Insurance</label>
+          <select id="insurance">
+            <option value="">Select insurance</option>
+            <option value="Aetna">Aetna</option>
+            <option value="UnitedHealthcare">UnitedHealthcare</option>
+            <option value="Cigna">Cigna</option>
+            <option value="Blue Cross Blue Shield">Blue Cross Blue Shield</option>
+            <option value="Medicare">Medicare</option>
+            <option value="Self Pay">Self Pay</option>
+          </select>
+        </div>
+        <div>
+          <label for="location">Location</label>
+          <input id="location" type="text" placeholder="ZIP code or city" />
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <button id="searchBtn">Show Available Slots</button>
+      </div>
+      <div id="searchMsg" class="muted" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Available Slots</h2>
+      <div id="results" class="muted">No slots loaded yet.</div>
+    </div>
+  </div>
+
+  <script>
+    function apiBase() { return window.location.origin; }
+    function esc(s) {
+      return String(s || "")
+        .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+    }
+    function fmt(v) {
+      try { return new Date(v).toLocaleString(); } catch { return v; }
+    }
+
+    document.getElementById("searchBtn").addEventListener("click", async () => {
+      const specialty = document.getElementById("specialty").value;
+      const insurance = document.getElementById("insurance").value;
+      const location = document.getElementById("location").value.trim();
+      const msg = document.getElementById("searchMsg");
+      const results = document.getElementById("results");
+
+      const qs = new URLSearchParams();
+      if (specialty) qs.set("specialty", specialty);
+      if (insurance) qs.set("insurance", insurance);
+      if (location) qs.set("location", location);
+
+      msg.textContent = "Searching...";
+      results.innerHTML = "";
+
+      try {
+        const res = await fetch(`/api/marketplace/slots?${qs.toString()}`);
+        const data = await res.json();
+
+        if (!data.ok) {
+          msg.textContent = "Unable to load slots.";
+          return;
+        }
+
+        const slots = data.slots || [];
+        msg.textContent = `${slots.length} slot(s) found`;
+
+        if (!slots.length) {
+          results.innerHTML = `<div class="muted">No matching slots found.</div>`;
+          return;
+        }
+
+        results.innerHTML = slots.map((slot, i) => `
+          <div class="slot">
+            <div class="row">
+              <div>
+                <h3>${esc(slot.providerName)}</h3>
+                <div><strong>${esc(slot.clinicName)}</strong></div>
+                <div class="muted">${esc(slot.specialty)}</div>
+                <div class="pill">${esc(slot.distanceMiles)} miles away</div>
+                <div style="margin-top:10px;">${esc(slot.address)}</div>
+                <div class="muted" style="margin-top:6px;">Accepts: ${esc(slot.insuranceAccepted)}</div>
+                <div class="muted">Time: ${esc(fmt(slot.startTime))}</div>
+                <div class="muted">Copay estimate: ${esc(slot.copayEstimate || "N/A")}</div>
+              </div>
+              <div style="min-width:180px;">
+                <button data-i="${i}">Book Now</button>
+              </div>
+            </div>
+          </div>
+        `).join("");
+
+        document.querySelectorAll("button[data-i]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const slot = slots[Number(btn.dataset.i)];
+            localStorage.setItem("carex_selected_slot", JSON.stringify(slot));
+            window.location.href = "/booking.html";
+          });
+        });
+      } catch (e) {
+        msg.textContent = "Search failed.";
+      }
+    });
+  </script>
+</body>
+</html>

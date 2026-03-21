@@ -37,6 +37,67 @@ router.post("/opportunities/:id/hold", async (req, res) => {
   }
 });
 
+// Patient-facing booking submission
+router.post("/bookings", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const patient = body.patient || {};
+
+    if (!body.slotId) {
+      return res.status(400).json({ ok:false, error:"Missing slotId" });
+    }
+
+    const required = ["firstName", "lastName", "dob", "phone", "email", "address", "memberId", "reason"];
+    for (const key of required) {
+      if (!patient[key]) {
+        return res.status(400).json({ ok:false, error:`Missing patient field: ${key}` });
+      }
+    }
+
+    if (!patient.consent) {
+      return res.status(400).json({ ok:false, error:"Consent is required" });
+    }
+
+    const booking = await createBooking({
+      bookingId: id("bk"),
+      providerId: body.providerId || null,
+      slotId: body.slotId,
+      opportunityId: body.opportunityId || `opp_`,
+      patientRequestId: body.patientRequestId || ('req_' + Date.now()),
+      providerName: body.providerName || "",
+      clinicName: body.clinicName || "",
+      specialty: body.specialty || "",
+      startTime: body.startTime || null,
+      insurance: body.insurance || "",
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      patientDob: patient.dob,
+      patientPhone: patient.phone,
+      patientEmail: patient.email,
+      patientAddress: patient.address,
+      insuranceMemberId: patient.memberId,
+      reason: patient.reason,
+      consent: patient.consent,
+      status: "REQUEST_SUBMITTED",
+      createdAt: new Date().toISOString(),
+      autoMatched: false,
+    });
+
+    res.json({
+      ok: true,
+      booking: {
+        id: booking.bookingId || booking.id,
+        providerName: body.providerName || "",
+        clinicName: body.clinicName || "",
+        startTime: body.startTime || null,
+        patientName: `${patient.firstName} ${patient.lastName}`,
+        status: booking.status || "REQUEST_SUBMITTED"
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ ok:false, error:e.message });
+  }
+});
+
 router.post("/bookings/:id/veto", async (req, res) => {
   try {
     const booking = await getBooking(req.params.id);
@@ -67,6 +128,16 @@ router.get("/bookings", async (req, res) => {
   try {
     const bookings = await listBookings();
     res.json({ ok:true, bookings });
+  } catch (e) {
+    res.status(500).json({ ok:false, error:e.message });
+  }
+});
+
+// Optional debug alias
+router.get("/bookings/debug", async (req, res) => {
+  try {
+    const bookings = await listBookings();
+    res.json({ ok:true, count: bookings.length, bookings });
   } catch (e) {
     res.status(500).json({ ok:false, error:e.message });
   }
