@@ -1,406 +1,150 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>CareX — Book a Same-Week Appointment</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f7f8fa; color: #1a1a2e; }
-
-  /* HEADER */
-  .header { background: #fff; border-bottom: 1px solid #e8eaf0; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
-  .logo { font-size: 22px; font-weight: 800; color: #2563eb; letter-spacing: -0.5px; }
-  .logo span { color: #10b981; }
-  .tagline { font-size: 13px; color: #6b7280; }
-
-  /* HERO */
-  .hero { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #fff; padding: 48px 24px 40px; text-align: center; }
-  .hero h1 { font-size: 28px; font-weight: 800; line-height: 1.2; margin-bottom: 10px; }
-  .hero p { font-size: 16px; opacity: 0.85; max-width: 480px; margin: 0 auto 28px; }
-  .urgency-badge { display: inline-block; background: #f59e0b; color: #fff; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 99px; margin-bottom: 16px; letter-spacing: 0.5px; }
-
-  /* SEARCH BAR */
-  .search-bar { background: #fff; border-radius: 16px; padding: 20px; max-width: 560px; margin: 0 auto; box-shadow: 0 4px 24px rgba(0,0,0,0.12); }
-  .search-row { display: flex; gap: 10px; flex-wrap: wrap; }
-  .search-bar select, .search-bar input { flex: 1; min-width: 140px; padding: 12px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 14px; color: #1a1a2e; background: #f9fafb; outline: none; }
-  .search-bar select:focus, .search-bar input:focus { border-color: #2563eb; background: #fff; }
-  .search-btn { width: 100%; margin-top: 10px; padding: 14px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
-  .search-btn:hover { background: #1d4ed8; }
-
-  /* MAIN */
-  .main { max-width: 640px; margin: 0 auto; padding: 28px 16px 60px; }
-
-  /* STATS BAR */
-  .stats-bar { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
-  .stat-pill { background: #fff; border: 1px solid #e5e7eb; border-radius: 99px; padding: 6px 14px; font-size: 12px; color: #6b7280; font-weight: 500; }
-  .stat-pill strong { color: #2563eb; }
-
-  /* SLOT CARDS */
-  .section-title { font-size: 14px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; }
-  .slots-list { display: flex; flex-direction: column; gap: 12px; }
-
-  .slot-card { background: #fff; border-radius: 14px; padding: 18px 20px; border: 1.5px solid #e5e7eb; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: all 0.15s; }
-  .slot-card:hover { border-color: #2563eb; box-shadow: 0 4px 16px rgba(37,99,235,0.08); transform: translateY(-1px); }
-  .slot-card.urgent { border-color: #f59e0b; background: #fffbeb; }
-
-  .slot-time-block { text-align: center; min-width: 64px; }
-  .slot-time { font-size: 20px; font-weight: 800; color: #1a1a2e; line-height: 1; }
-  .slot-date { font-size: 11px; color: #6b7280; margin-top: 3px; font-weight: 500; }
-  .slot-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; flex-shrink: 0; }
-  .slot-dot.urgent { background: #f59e0b; }
-
-  .slot-info { flex: 1; }
-  .slot-provider { font-size: 15px; font-weight: 700; color: #1a1a2e; }
-  .slot-specialty { font-size: 13px; color: #6b7280; margin-top: 2px; }
-  .slot-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-  .tag { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 500; }
-  .tag-insurance { background: #eff6ff; color: #2563eb; }
-  .tag-type { background: #f0fdf4; color: #16a34a; }
-  .tag-urgent { background: #fef3c7; color: #d97706; }
-
-  .slot-book-btn { background: #2563eb; color: #fff; border: none; border-radius: 10px; padding: 10px 18px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
-  .slot-book-btn:hover { background: #1d4ed8; }
-
-  /* EMPTY STATE */
-  .empty-state { text-align: center; padding: 48px 24px; color: #9ca3af; }
-  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
-  .empty-state p { font-size: 15px; }
-
-  /* LOADING */
-  .loading { text-align: center; padding: 40px; color: #6b7280; }
-  .spinner { width: 32px; height: 32px; border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* MODAL */
-  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
-  .modal-overlay.open { display: flex; }
-  .modal { background: #fff; border-radius: 20px; padding: 28px; max-width: 440px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-  .modal h2 { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
-  .modal .slot-summary { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px; margin: 16px 0; }
-  .modal .slot-summary p { font-size: 14px; color: #166534; font-weight: 600; }
-  .modal .slot-summary span { font-weight: 400; color: #4b7a5a; }
-  .modal label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 5px; margin-top: 14px; }
-  .modal input, .modal select { width: 100%; padding: 11px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; }
-  .modal input:focus, .modal select:focus { border-color: #2563eb; }
-  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
-  .btn-confirm { flex: 1; padding: 13px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; }
-  .btn-confirm:hover { background: #1d4ed8; }
-  .btn-cancel { padding: 13px 18px; background: #f3f4f6; color: #6b7280; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
-
-  /* SUCCESS */
-  .success-screen { display: none; text-align: center; padding: 32px 24px; }
-  .success-screen.show { display: block; }
-  .success-icon { font-size: 56px; margin-bottom: 16px; }
-  .success-screen h2 { font-size: 24px; font-weight: 800; color: #1a1a2e; margin-bottom: 8px; }
-  .success-screen p { font-size: 15px; color: #6b7280; line-height: 1.5; }
-  .success-details { background: #f0fdf4; border-radius: 12px; padding: 16px; margin: 20px 0; text-align: left; }
-  .success-details p { font-size: 14px; color: #166534; margin-bottom: 4px; }
-  .btn-done { margin-top: 8px; padding: 13px 32px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareX - Find Care</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f7f9fc; color: #111827; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
+    .hero { background: linear-gradient(135deg,#2563eb,#1d4ed8); color: white; border-radius: 18px; padding: 32px; margin-bottom: 20px; }
+    .card { background: white; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    input, select, button, textarea {
+      width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; box-sizing: border-box; font-size: 14px;
+    }
+    button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 600; }
+    .slot { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 12px; background: #fff; }
+    .muted { color: #6b7280; font-size: 14px; }
+    .row { display: flex; justify-content: space-between; gap: 12px; align-items: start; flex-wrap: wrap; }
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:700; margin-top:8px; }
+  </style>
 </head>
 <body>
-
-<!-- HEADER -->
-<div class="header">
-  <div class="logo">Care<span>X</span></div>
-  <div class="tagline">Same-week appointments, available now</div>
-</div>
-
-<!-- HERO -->
-<div class="hero">
-  <div class="urgency-badge">⚡ SLOTS AVAILABLE TODAY</div>
-  <h1>See a doctor this week —<br/>no waiting, no referral needed</h1>
-  <p>Real openings from cancellations and same-day slots. Book in 60 seconds.</p>
-  <div class="search-bar">
-    <div class="search-row">
-      <select id="specialtyFilter">
-        <option value="">Any specialty</option>
-        <option value="dermatology">Dermatology</option>
-        <option value="psychiatry">Psychiatry</option>
-        <option value="gastroenterology">Gastroenterology (GI)</option>
-        <option value="neurology">Neurology</option>
-        <option value="rheumatology">Rheumatology</option>
-        <option value="obgyn">OB/GYN</option>
-        <option value="cardiology">Cardiology</option>
-        <option value="ophthalmology">Ophthalmology</option>
-        <option value="hematology_oncology">Hematology / Oncology</option>
-        <option value="endocrinology">Endocrinology</option>
-        <option value="neurosurgery">Neurosurgery</option>
-        <option value="ent">ENT (Ear, Nose & Throat)</option>
-        <option value="orthopedic_surgery">Orthopedic Surgery</option>
-        <option value="urology">Urology</option>
-        <option value="pulmonology">Pulmonology</option>
-        <option value="nephrology">Nephrology</option>
-        <option value="allergy">Allergy & Immunology</option>
-        <option value="physical_therapy">Physical Therapy</option>
-        <option value="podiatry">Podiatry</option>
-        <option value="sleep_medicine">Sleep Medicine</option>
-        <option value="primary_care">Primary Care</option>
-        <option value="gynecology">Gynecology</option>
-        <option value="urgent_care">Urgent Care</option>
-      </select>
-      <select id="insuranceFilter">
-        <option value="">Any insurance</option>
-        <option value="aetna">Aetna</option>
-        <option value="bcbs">Blue Cross</option>
-        <option value="cigna">Cigna</option>
-        <option value="united">United</option>
-        <option value="medicare">Medicare</option>
-        <option value="medicaid">Medicaid</option>
-        <option value="self_pay">Self Pay</option>
-      </select>
+  <div class="wrap">
+    <div class="hero">
+      <h1>See a doctor this week — no waiting, no referral needed</h1>
+      <p>Real openings from cancellations and same-day slots. Search by specialty, insurance, and location.</p>
     </div>
-    <button class="search-btn" onclick="loadSlots()">🔍 Show Available Slots</button>
-  </div>
-</div>
 
-<!-- MAIN -->
-<div class="main">
-  <div class="stats-bar" id="statsBar" style="display:none">
-    <div class="stat-pill"><strong id="statCount">0</strong> slots available</div>
-    <div class="stat-pill">NYC area</div>
-    <div class="stat-pill">Updated <strong>live</strong></div>
-  </div>
-
-  <div id="slotsContainer">
-    <div class="empty-state">
-      <div class="icon">🏥</div>
-      <p>Search above to see available appointments near you.</p>
-    </div>
-  </div>
-</div>
-
-<!-- BOOKING MODAL -->
-<div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
-    <div id="modalContent">
-      <h2>Confirm your booking</h2>
-      <p style="font-size:13px;color:#6b7280;margin-top:4px;">This slot will be held for 5 minutes.</p>
-
-      <div class="slot-summary">
-        <p id="modalSlotTime">—</p>
-        <p><span id="modalSlotProvider">—</span></p>
-        <p><span id="modalSlotSpecialty">—</span></p>
+    <div class="card">
+      <h2>Search</h2>
+      <div class="grid">
+        <div>
+          <label for="specialty">Specialty</label>
+          <select id="specialty">
+            <option value="">Select specialty</option>
+            <option value="primary_care">Primary Care</option>
+            <option value="urgent_care">Urgent Care</option>
+            <option value="cardiology">Cardiology</option>
+            <option value="dermatology">Dermatology</option>
+            <option value="pediatrics">Pediatrics</option>
+          </select>
+        </div>
+        <div>
+          <label for="insurance">Insurance</label>
+          <select id="insurance">
+            <option value="">Select insurance</option>
+            <option value="Aetna">Aetna</option>
+            <option value="UnitedHealthcare">UnitedHealthcare</option>
+            <option value="Cigna">Cigna</option>
+            <option value="Blue Cross Blue Shield">Blue Cross Blue Shield</option>
+            <option value="Medicare">Medicare</option>
+            <option value="Self Pay">Self Pay</option>
+          </select>
+        </div>
+        <div>
+          <label for="location">Location</label>
+          <input id="location" type="text" placeholder="ZIP code or city" />
+        </div>
       </div>
-
-      <label>Your name</label>
-      <input type="text" id="patientName" placeholder="First and last name"/>
-
-      <label>Mobile number (for SMS confirmation)</label>
-      <input type="tel" id="patientPhone" placeholder="+1 (555) 000-0000"/>
-
-      <label>Insurance</label>
-      <select id="patientInsurance">
-        <option value="self_pay">Self Pay</option>
-        <option value="aetna">Aetna</option>
-        <option value="bcbs">Blue Cross Blue Shield</option>
-        <option value="cigna">Cigna</option>
-        <option value="united">United Healthcare</option>
-        <option value="medicare">Medicare</option>
-        <option value="medicaid">Medicaid</option>
-      </select>
-
-      <div class="modal-actions">
-        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-        <button class="btn-confirm" onclick="confirmBooking()">Book Now →</button>
+      <div style="margin-top:16px;">
+        <button id="searchBtn">Show Available Slots</button>
       </div>
+      <div id="searchMsg" class="muted" style="margin-top:12px;"></div>
     </div>
 
-    <div class="success-screen" id="successScreen">
-      <div class="success-icon">✅</div>
-      <h2>You're booked!</h2>
-      <p>Check your phone — a confirmation SMS is on its way.</p>
-      <div class="success-details" id="successDetails"></div>
-      <button class="btn-done" onclick="closeModal()">Done</button>
+    <div class="card">
+      <h2>Available Slots</h2>
+      <div id="results" class="muted">No slots loaded yet.</div>
     </div>
   </div>
-</div>
 
-<script>
-  let selectedSlot = null;
+  <script>
+    function apiBase() { return window.location.origin; }
+    function esc(s) {
+      return String(s || "")
+        .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+    }
+    function fmt(v) {
+      try { return new Date(v).toLocaleString(); } catch { return v; }
+    }
 
-  function formatTime(iso) {
-    const d = new Date(iso);
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  }
+    document.getElementById("searchBtn").addEventListener("click", async () => {
+      const specialty = document.getElementById("specialty").value;
+      const insurance = document.getElementById("insurance").value;
+      const location = document.getElementById("location").value.trim();
+      const msg = document.getElementById("searchMsg");
+      const results = document.getElementById("results");
 
-  function formatDate(iso) {
-    const d = new Date(iso);
-    const today = new Date();
-    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    if (d.toDateString() === today.toDateString()) return 'Today';
-    if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  }
+      const qs = new URLSearchParams();
+      if (specialty) qs.set("specialty", specialty);
+      if (insurance) qs.set("insurance", insurance);
+      if (location) qs.set("location", location);
 
-  function isUrgent(iso) {
-    const d = new Date(iso);
-    const now = new Date();
-    return (d - now) < 4 * 60 * 60 * 1000; // within 4 hours
-  }
+      msg.textContent = "Searching...";
+      results.innerHTML = "";
 
-  function specialtyLabel(s) {
-    const map = {
-      dermatology: 'Dermatology', psychiatry: 'Psychiatry',
-      gastroenterology: 'Gastroenterology (GI)', neurology: 'Neurology',
-      rheumatology: 'Rheumatology', obgyn: 'OB/GYN',
-      cardiology: 'Cardiology', ophthalmology: 'Ophthalmology',
-      hematology_oncology: 'Hematology / Oncology', endocrinology: 'Endocrinology',
-      neurosurgery: 'Neurosurgery', ent: 'ENT (Ear, Nose & Throat)',
-      orthopedic_surgery: 'Orthopedic Surgery', urology: 'Urology',
-      pulmonology: 'Pulmonology', nephrology: 'Nephrology',
-      allergy: 'Allergy & Immunology', physical_therapy: 'Physical Therapy',
-      podiatry: 'Podiatry', sleep_medicine: 'Sleep Medicine',
-      primary_care: 'Primary Care', gynecology: 'Gynecology', urgent_care: 'Urgent Care'
-    };
-    return map[s] || s || 'General';
-  }
+      try {
+        const res = await fetch(`/api/marketplace/slots?${qs.toString()}`);
+        const data = await res.json();
 
-  async function loadSlots() {
-    const specialty = document.getElementById('specialtyFilter').value;
-    const insurance = document.getElementById('insuranceFilter').value;
-    const container = document.getElementById('slotsContainer');
-    const statsBar = document.getElementById('statsBar');
+        if (!data.ok) {
+          msg.textContent = "Unable to load slots.";
+          return;
+        }
 
-    container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Finding available slots...</p></div>';
-    statsBar.style.display = 'none';
+        const slots = data.slots || [];
+        msg.textContent = `${slots.length} slot(s) found`;
 
-    try {
-      let url = '/marketplace/slots?limit=20';
-      if (specialty) url += `&specialty=${specialty}`;
-      if (insurance) url += `&insurance=${insurance}`;
+        if (!slots.length) {
+          results.innerHTML = `<div class="muted">No matching slots found.</div>`;
+          return;
+        }
 
-      const res = await fetch(url);
-      const data = await res.json();
-      const slots = data.slots || [];
-
-      document.getElementById('statCount').textContent = slots.length;
-      statsBar.style.display = slots.length > 0 ? 'flex' : 'none';
-
-      if (slots.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="icon">🔍</div>
-            <p>No slots found right now. Try a different specialty or check back soon — new openings appear throughout the day.</p>
-          </div>`;
-        return;
-      }
-
-      container.innerHTML = '<div class="section-title">Available this week</div><div class="slots-list" id="slotsList"></div>';
-      const list = document.getElementById('slotsList');
-
-      slots.forEach(slot => {
-        const urgent = isUrgent(slot.start_time);
-        const card = document.createElement('div');
-        card.className = `slot-card ${urgent ? 'urgent' : ''}`;
-        card.innerHTML = `
-          <div class="slot-time-block">
-            <div class="slot-time">${formatTime(slot.start_time)}</div>
-            <div class="slot-date">${formatDate(slot.start_time)}</div>
-          </div>
-          <div class="slot-dot ${urgent ? 'urgent' : ''}"></div>
-          <div class="slot-info">
-            <div class="slot-provider">${slot.provider_name || 'CareX Provider'}</div>
-            <div class="slot-specialty">${specialtyLabel(slot.specialty_type)}</div>
-            <div class="slot-tags">
-              ${urgent ? '<span class="tag tag-urgent">⚡ Today</span>' : ''}
-              <span class="tag tag-type">${slot.visit_type || 'In-person'}</span>
-              ${slot.insurance_accepted ? `<span class="tag tag-insurance">${slot.insurance_accepted}</span>` : ''}
+        results.innerHTML = slots.map((slot, i) => `
+          <div class="slot">
+            <div class="row">
+              <div>
+                <h3>${esc(slot.providerName)}</h3>
+                <div><strong>${esc(slot.clinicName)}</strong></div>
+                <div class="muted">${esc(slot.specialty)}</div>
+                <div class="pill">${esc(slot.distanceMiles)} miles away</div>
+                <div style="margin-top:10px;">${esc(slot.address)}</div>
+                <div class="muted" style="margin-top:6px;">Accepts: ${esc(slot.insuranceAccepted)}</div>
+                <div class="muted">Time: ${esc(fmt(slot.startTime))}</div>
+                <div class="muted">Copay estimate: ${esc(slot.copayEstimate || "N/A")}</div>
+              </div>
+              <div style="min-width:180px;">
+                <button data-i="${i}">Book Now</button>
+              </div>
             </div>
           </div>
-          <button class="slot-book-btn" onclick="openModal(event)">Book</button>
-        `;
-        card.dataset.slot = JSON.stringify(slot);
-        card.addEventListener('click', (e) => {
-          if (!e.target.classList.contains('slot-book-btn')) openBookingModal(slot);
+        `).join("");
+
+        document.querySelectorAll("button[data-i]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const slot = slots[Number(btn.dataset.i)];
+            localStorage.setItem("carex_selected_slot", JSON.stringify(slot));
+            window.location.href = "/booking.html";
+          });
         });
-        card.querySelector('.slot-book-btn').addEventListener('click', (e) => {
-          e.stopPropagation();
-          openBookingModal(slot);
-        });
-        list.appendChild(card);
-      });
-
-    } catch (err) {
-      container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>Could not load slots. Please try again.</p></div>`;
-    }
-  }
-
-  function openBookingModal(slot) {
-    selectedSlot = slot;
-    document.getElementById('modalSlotTime').textContent = `${formatDate(slot.start_time)} at ${formatTime(slot.start_time)}`;
-    document.getElementById('modalSlotProvider').textContent = slot.provider_name || 'CareX Provider';
-    document.getElementById('modalSlotSpecialty').textContent = specialtyLabel(slot.specialty_type);
-    document.getElementById('modalContent').style.display = 'block';
-    document.getElementById('successScreen').classList.remove('show');
-    document.getElementById('modalOverlay').classList.add('open');
-    document.getElementById('patientName').focus();
-  }
-
-  function closeModal() {
-    document.getElementById('modalOverlay').classList.remove('open');
-    selectedSlot = null;
-    document.getElementById('patientName').value = '';
-    document.getElementById('patientPhone').value = '';
-  }
-
-  async function confirmBooking() {
-    const name = document.getElementById('patientName').value.trim();
-    const phone = document.getElementById('patientPhone').value.trim();
-    const insurance = document.getElementById('patientInsurance').value;
-
-    if (!name) { alert('Please enter your name.'); return; }
-    if (!phone) { alert('Please enter your mobile number for SMS confirmation.'); return; }
-
-    const btn = document.querySelector('.btn-confirm');
-    btn.textContent = 'Booking...';
-    btn.disabled = true;
-
-    try {
-      const patientToken = `pat_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-      const res = await fetch('/marketplace/book', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slotId: selectedSlot.id,
-          patientToken,
-          insuranceType: insurance,
-          patientName: name,
-          patientPhone: phone,
-        })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.error || 'Booking failed. This slot may have just been taken.');
-        btn.textContent = 'Book Now →';
-        btn.disabled = false;
-        return;
+      } catch (e) {
+        msg.textContent = "Search failed.";
       }
-
-      // Show success
-      document.getElementById('modalContent').style.display = 'none';
-      document.getElementById('successDetails').innerHTML = `
-        <p>📅 ${formatDate(selectedSlot.start_time)} at ${formatTime(selectedSlot.start_time)}</p>
-        <p>🏥 ${selectedSlot.provider_name || 'CareX Provider'}</p>
-        <p>📱 Confirmation sent to ${phone}</p>
-      `;
-      document.getElementById('successScreen').classList.add('show');
-
-      // Reload slots after 3 seconds
-      setTimeout(() => { closeModal(); loadSlots(); }, 4000);
-
-    } catch (err) {
-      alert('Something went wrong. Please try again.');
-      btn.textContent = 'Book Now →';
-      btn.disabled = false;
-    }
-  }
-
-  // Auto-load on page open
-  loadSlots();
-</script>
+    });
+  </script>
 </body>
 </html>

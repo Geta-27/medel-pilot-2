@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareX - Confirmation</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f7f9fc; color: #111827; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 24px; }
+    .card { background: white; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    .ok { color: #166534; font-weight: 700; }
+    a.button { display:inline-block; margin-top:16px; padding:12px 18px; background:#2563eb; color:white; text-decoration:none; border-radius:10px; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2 class="ok">Request Submitted</h2>
+      <div id="summary"></div>
+      <a class="button" href="/patient.html">Back to Search</a>
+    </div>
+  </div>
+  <script>
+    const booking = JSON.parse(localStorage.getItem("carex_booking_confirmation") || "null");
+    const summary = document.getElementById("summary");
+    if (!booking) {
+      summary.innerHTML = "<p>No confirmation data found.</p>";
+    } else {
+      summary.innerHTML = `
+        <p><strong>Booking ID:</strong> ${booking.id || ""}</p>
+        <p><strong>Patient:</strong> ${booking.patientName || ""}</p>
+        <p><strong>Provider:</strong> ${booking.providerName || ""}</p>
+        <p><strong>Clinic:</strong> ${booking.clinicName || ""}</p>
+        <p><strong>Time:</strong> ${booking.startTime ? new Date(booking.startTime).toLocaleString() : ""}</p>
+        <p><strong>Status:</strong> ${booking.status || ""}</p>
+      `;
+    }
+  </script>
+</body>
+</html>

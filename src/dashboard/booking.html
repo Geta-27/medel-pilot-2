@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareX - Book Appointment</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f7f9fc; color: #111827; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 24px; }
+    .card { background: white; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    input, textarea, button { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; box-sizing: border-box; font-size: 14px; }
+    button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 600; }
+    .muted { color: #6b7280; }
+    .err { color: #b91c1c; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2>Selected Slot</h2>
+      <div id="slotInfo" class="muted"></div>
+    </div>
+
+    <div class="card">
+      <h2>Patient Details</h2>
+      <form id="bookingForm">
+        <div class="grid">
+          <div><label>First Name</label><input id="firstName" required /></div>
+          <div><label>Last Name</label><input id="lastName" required /></div>
+          <div><label>Date of Birth</label><input id="dob" type="date" required /></div>
+          <div><label>Phone</label><input id="phone" required /></div>
+          <div><label>Email</label><input id="email" type="email" required /></div>
+          <div><label>Insurance Member ID</label><input id="memberId" required /></div>
+        </div>
+        <div style="margin-top:12px;"><label>Address</label><input id="address" required /></div>
+        <div style="margin-top:12px;"><label>Reason for Visit</label><textarea id="reason" rows="4" required></textarea></div>
+        <div style="margin-top:12px;">
+          <label><input id="consent" type="checkbox" style="width:auto; margin-right:8px;" required />I consent to be contacted about this appointment request.</label>
+        </div>
+        <div id="msg" class="muted" style="margin:12px 0;"></div>
+        <button type="submit">Submit Booking Request</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const slot = JSON.parse(localStorage.getItem("carex_selected_slot") || "null");
+    const slotInfo = document.getElementById("slotInfo");
+    if (!slot) {
+      slotInfo.innerHTML = '<span class="err">No slot selected. Go back to search.</span>';
+    } else {
+      slotInfo.innerHTML = `
+        <div><strong>${slot.providerName || ""}</strong></div>
+        <div><strong>${slot.clinicName || ""}</strong></div>
+        <div>${slot.specialty || ""}</div>
+        <div>${slot.address || ""}</div>
+        <div>${slot.distanceMiles ?? "?"} miles away</div>
+        <div>${new Date(slot.startTime || Date.now()).toLocaleString()}</div>
+      `;
+    }
+
+    document.getElementById("bookingForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!slot) return;
+
+      const payload = {
+        slotId: slot.slotId,
+        providerId: slot.providerId,
+        providerName: slot.providerName,
+        clinicName: slot.clinicName,
+        specialty: slot.specialty,
+        startTime: slot.startTime,
+        insurance: slot.insuranceAccepted,
+        patient: {
+          firstName: document.getElementById("firstName").value.trim(),
+          lastName: document.getElementById("lastName").value.trim(),
+          dob: document.getElementById("dob").value,
+          phone: document.getElementById("phone").value.trim(),
+          email: document.getElementById("email").value.trim(),
+          address: document.getElementById("address").value.trim(),
+          memberId: document.getElementById("memberId").value.trim(),
+          reason: document.getElementById("reason").value.trim(),
+          consent: document.getElementById("consent").checked
+        }
+      };
+
+      const msg = document.getElementById("msg");
+      msg.textContent = "Submitting...";
+
+      try {
+        const res = await fetch("/api/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (!data.ok) {
+          msg.innerHTML = `<span class="err">${data.error || "Booking failed"}</span>`;
+          return;
+        }
+
+        localStorage.setItem("carex_booking_confirmation", JSON.stringify(data.booking));
+        window.location.href = "/confirmation.html";
+      } catch {
+        msg.innerHTML = `<span class="err">Booking request failed</span>`;
+      }
+    });
+  </script>
+</body>
+</html>
