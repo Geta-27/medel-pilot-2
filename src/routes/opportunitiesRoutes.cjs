@@ -36,7 +36,6 @@ router.get("/marketplace/slots", async (req, res) => {
         s.status,
         p.name,
         p.specialty,
-        p.location_text,
         p.insurance
       FROM slots s
       LEFT JOIN providers p
@@ -54,7 +53,7 @@ router.get("/marketplace/slots", async (req, res) => {
       providerName: r.name || r.provider_id,
       clinicName: "CareX Clinic",
       specialty: r.specialty || "general",
-      address: r.location_text || "Address unavailable",
+      address: "Address unavailable",
       distanceMiles: null,
       startTime: r.start_time,
       endTime: r.end_time,
@@ -75,8 +74,7 @@ router.get("/marketplace/slots", async (req, res) => {
     }
 
     if (location) {
-      // placeholder until real geocoding is added
-      slots = slots.sort((a, b) => String(a.address).localeCompare(String(b.address)));
+      slots = slots.sort((a, b) => String(a.providerName).localeCompare(String(b.providerName)));
     }
 
     res.json({ ok: true, slots });
