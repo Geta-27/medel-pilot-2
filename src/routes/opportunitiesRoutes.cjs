@@ -12,29 +12,42 @@ const pool =
 
 global.__carexPool = pool;
 
-function estimateDistanceMiles(userLocation, providerAddress) {
-  if (!userLocation || !providerAddress) return null;
-  const u = String(userLocation).toLowerCase();
-  const p = String(providerAddress).toLowerCase();
-
-  if (u.includes("hoboken") && p.includes("hoboken")) return 1.8;
-  if (u.includes("jersey city") && p.includes("hoboken")) return 3.4;
-  if (u.includes("union city") && p.includes("hoboken")) return 2.1;
-  if (u.includes("manhattan") && p.includes("hoboken")) return 5.2;
-
-  return 7.5;
+function toRad(v) {
+  return (Number(v) * Math.PI) / 180;
 }
 
-function estimateCopay(insurance, specialty) {
-  const ins = String(insurance || "").toLowerCase();
-  const spec = String(specialty || "").toLowerCase();
+function haversineMiles(lat1, lng1, lat2, lng2) {
+  if ([lat1, lng1, lat2, lng2].some((v) => v === null || v === undefined || v === "" || Number.isNaN(Number(v)))) {
+    return null;
+  }
+  const R = 3958.8;
+  const dLat = toRad(Number(lat2) - Number(lat1));
+  const dLng = toRad(Number(lng2) - Number(lng1));
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+}
 
-  if (ins.includes("aetna") && spec === "primary_care") return "$35";
-  if (ins.includes("aetna") && spec === "urgent_care") return "$45";
-  if (ins.includes("united") && spec === "primary_care") return "$40";
-  if (ins.includes("united") && spec === "urgent_care") return "$55";
+function buildAddress(r) {
+  return (
+    r.location ||
+    [r.address_line1, r.city, r.state, r.zip].filter(Boolean).join(", ") ||
+    "Address unavailable"
+  );
+}
 
-  return "$50";
+function getEstimatedOutOfPocket(payerRules, insurance, specialty) {
+  const payer = String(insurance || "").trim();
+  const spec = String(specialty || "").trim();
+  if (!payerRules || typeof payerRules !== "object") return null;
+  const payerRule = payerRules[payer];
+  if (!payerRule || typeof payerRule !== "object") return null;
+  const specRule = payerRule[spec];
+  if (!specRule || typeof specRule !== "object") return null;
+  if (specRule.copay === undefined || specRule.copay === null) return null;
+  return `$${specRule.copay}`;
 }
 
 router.get("/providers/:id/opportunities", async (req, res) => {
@@ -48,7 +61,7 @@ router.get("/providers/:id/opportunities", async (req, res) => {
 
 router.get("/marketplace/slots", async (req, res) => {
   try {
-    const { specialty, insurance, location } = req.query;
+    const { specialty, insurance, lat, lng } = req.query;
 
     const result = await pool.query(
       `
@@ -62,35 +75,58 @@ router.get("/marketplace/slots", async (req, res) => {
         p.clinic_name,
         p.specialty,
         p.insurance,
-        p.location
+        p.location,
+        p.address_line1,
+        p.city,
+        p.state,
+        p.zip,
+        p.lat,
+        p.lng,
+        p.visit_type,
+        p.payer_rules
       FROM slots s
       LEFT JOIN providers p
         ON p.id = s.provider_id
       WHERE s.status = 'available'
         AND s.start_time > NOW()
+        AND COALESCE(p.online, true) = true
       ORDER BY s.start_time ASC
-      LIMIT 50
+      LIMIT 100
       `
     );
 
-    let slots = result.rows.map((r) => ({
-      slotId: r.id,
-      providerId: r.provider_id,
-      providerName: r.name || r.provider_id,
-      clinicName: r.clinic_name || "CareX Clinic",
-      specialty: r.specialty || "general",
-      address: r.location || "Address unavailable",
-      distanceMiles: estimateDistanceMiles(location, r.location),
-      startTime: r.start_time,
-      endTime: r.end_time,
-      insuranceAccepted: Array.isArray(r.insurance)
+    let slots = result.rows.map((r) => {
+      const address = buildAddress(r);
+      const distanceMiles = haversineMiles(lat, lng, r.lat, r.lng);
+      const insuranceAccepted = Array.isArray(r.insurance)
         ? r.insurance.join(", ")
-        : r.insurance || "Unknown",
-      copayEstimate: estimateCopay(insurance || r.insurance, r.specialty),
-    }));
+        : r.insurance || "Unknown";
+      const estimatedOutOfPocket = getEstimatedOutOfPocket(
+        r.payer_rules,
+        insurance || r.insurance,
+        r.specialty
+      );
+
+      return {
+        slotId: r.id,
+        providerId: r.provider_id,
+        providerName: r.name || r.provider_id,
+        clinicName: r.clinic_name || "CareX Clinic",
+        specialty: r.specialty || "general",
+        visitType: r.visit_type || "in_person",
+        address,
+        lat: r.lat,
+        lng: r.lng,
+        distanceMiles,
+        startTime: r.start_time,
+        endTime: r.end_time,
+        insuranceAccepted,
+        estimatedOutOfPocket
+      };
+    });
 
     if (specialty) {
-      slots = slots.filter((s) => s.specialty === specialty);
+      slots = slots.filter((s) => String(s.specialty) === String(specialty));
     }
 
     if (insurance) {
@@ -99,14 +135,88 @@ router.get("/marketplace/slots", async (req, res) => {
       );
     }
 
-    if (location) {
-      slots = slots.sort((a, b) => (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999));
+    if (lat && lng) {
+      slots = slots.sort((a, b) => (a.distanceMiles ?? 9999) - (b.distanceMiles ?? 9999));
     }
 
     res.json({ ok: true, slots });
   } catch (e) {
     console.error("marketplace slots error:", e);
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post("/marketplace/book", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { slotId, patientId = null } = req.body || {};
+    if (!slotId) {
+      return res.status(400).json({ ok: false, error: "slotId is required" });
+    }
+
+    await client.query("BEGIN");
+
+    const slotResult = await client.query(
+      `
+      SELECT id, provider_id, start_time, end_time, status
+      FROM slots
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [slotId]
+    );
+
+    if (!slotResult.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "Slot not found" });
+    }
+
+    const slot = slotResult.rows[0];
+
+    if (slot.status !== "available") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, error: "Slot is no longer available" });
+    }
+
+    await client.query(
+      `
+      UPDATE slots
+      SET status = 'booked'
+      WHERE id = $1
+      `,
+      [slotId]
+    );
+
+    const bookingId = `bk_${Date.now()}`;
+
+    await client.query(
+      `
+      INSERT INTO bookings (id, patient_id, provider_id, slot_id, status, created_at)
+      VALUES ($1, $2, $3, $4, 'confirmed', NOW())
+      `,
+      [bookingId, patientId, slot.provider_id, slot.id]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      booking: {
+        bookingId,
+        slotId: slot.id,
+        providerId: slot.provider_id,
+        patientId,
+        status: "confirmed",
+        startTime: slot.start_time,
+        endTime: slot.end_time
+      }
+    });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("marketplace booking error:", e);
+    return res.status(500).json({ ok: false, error: e.message });
+  } finally {
+    client.release();
   }
 });
 
