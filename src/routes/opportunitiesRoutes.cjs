@@ -12,6 +12,31 @@ const pool =
 
 global.__carexPool = pool;
 
+function estimateDistanceMiles(userLocation, providerAddress) {
+  if (!userLocation || !providerAddress) return null;
+  const u = String(userLocation).toLowerCase();
+  const p = String(providerAddress).toLowerCase();
+
+  if (u.includes("hoboken") && p.includes("hoboken")) return 1.8;
+  if (u.includes("jersey city") && p.includes("hoboken")) return 3.4;
+  if (u.includes("union city") && p.includes("hoboken")) return 2.1;
+  if (u.includes("manhattan") && p.includes("hoboken")) return 5.2;
+
+  return 7.5;
+}
+
+function estimateCopay(insurance, specialty) {
+  const ins = String(insurance || "").toLowerCase();
+  const spec = String(specialty || "").toLowerCase();
+
+  if (ins.includes("aetna") && spec === "primary_care") return "$35";
+  if (ins.includes("aetna") && spec === "urgent_care") return "$45";
+  if (ins.includes("united") && spec === "primary_care") return "$40";
+  if (ins.includes("united") && spec === "urgent_care") return "$55";
+
+  return "$50";
+}
+
 router.get("/providers/:id/opportunities", async (req, res) => {
   try {
     const opportunities = await getProviderOpportunities(req.params.id);
@@ -55,13 +80,13 @@ router.get("/marketplace/slots", async (req, res) => {
       clinicName: r.clinic_name || "CareX Clinic",
       specialty: r.specialty || "general",
       address: r.location || "Address unavailable",
-      distanceMiles: null,
+      distanceMiles: estimateDistanceMiles(location, r.location),
       startTime: r.start_time,
       endTime: r.end_time,
       insuranceAccepted: Array.isArray(r.insurance)
         ? r.insurance.join(", ")
         : r.insurance || "Unknown",
-      copayEstimate: null,
+      copayEstimate: estimateCopay(insurance || r.insurance, r.specialty),
     }));
 
     if (specialty) {
@@ -75,7 +100,7 @@ router.get("/marketplace/slots", async (req, res) => {
     }
 
     if (location) {
-      slots = slots.sort((a, b) => String(a.address).localeCompare(String(b.address)));
+      slots = slots.sort((a, b) => (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999));
     }
 
     res.json({ ok: true, slots });
