@@ -149,7 +149,7 @@ router.get("/marketplace/slots", async (req, res) => {
 router.post("/marketplace/book", async (req, res) => {
   const client = await pool.connect();
   try {
-    const { slotId, patientId = null } = req.body || {};
+    const { slotId, patientName } = req.body || {};
     if (!slotId) {
       return res.status(400).json({ ok: false, error: "slotId is required" });
     }
@@ -191,10 +191,10 @@ router.post("/marketplace/book", async (req, res) => {
 
     await client.query(
       `
-      INSERT INTO bookings (id, patient_id, provider_id, slot_id, status, created_at)
-      VALUES ($1, $2, $3, $4, 'confirmed', NOW())
+      INSERT INTO bookings (id, provider_id, patient_name, start_time, status)
+      VALUES ($1, $2, $3, $4, 'confirmed')
       `,
-      [bookingId, patientId, slot.provider_id, slot.id]
+      [bookingId, slot.provider_id, patientName || "Guest Patient", slot.start_time]
     );
 
     await client.query("COMMIT");
@@ -205,7 +205,7 @@ router.post("/marketplace/book", async (req, res) => {
         bookingId,
         slotId: slot.id,
         providerId: slot.provider_id,
-        patientId,
+        patientName: patientName || "Guest Patient",
         status: "confirmed",
         startTime: slot.start_time,
         endTime: slot.end_time
