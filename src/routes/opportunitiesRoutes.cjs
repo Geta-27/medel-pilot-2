@@ -21,7 +21,6 @@ router.get("/providers/:id/opportunities", async (req, res) => {
   }
 });
 
-// Patient-facing marketplace slots (REAL DB)
 router.get("/marketplace/slots", async (req, res) => {
   try {
     const { specialty, insurance, location } = req.query;
@@ -35,8 +34,10 @@ router.get("/marketplace/slots", async (req, res) => {
         s.end_time,
         s.status,
         p.name,
+        p.clinic_name,
         p.specialty,
-        p.insurance
+        p.insurance,
+        p.location
       FROM slots s
       LEFT JOIN providers p
         ON p.id = s.provider_id
@@ -51,9 +52,9 @@ router.get("/marketplace/slots", async (req, res) => {
       slotId: r.id,
       providerId: r.provider_id,
       providerName: r.name || r.provider_id,
-      clinicName: "CareX Clinic",
+      clinicName: r.clinic_name || "CareX Clinic",
       specialty: r.specialty || "general",
-      address: "Address unavailable",
+      address: r.location || "Address unavailable",
       distanceMiles: null,
       startTime: r.start_time,
       endTime: r.end_time,
@@ -74,7 +75,7 @@ router.get("/marketplace/slots", async (req, res) => {
     }
 
     if (location) {
-      slots = slots.sort((a, b) => String(a.providerName).localeCompare(String(b.providerName)));
+      slots = slots.sort((a, b) => String(a.address).localeCompare(String(b.address)));
     }
 
     res.json({ ok: true, slots });
